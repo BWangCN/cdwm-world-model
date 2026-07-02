@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+wm_runs/
+viz_out/
+eval/eval_*.json
+*.mp4
+.DS_Store

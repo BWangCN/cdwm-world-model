@@ -1,0 +1,7 @@
+episode,object,shape,net_tilt,band,split,weight
+EXDIR/episodes_aug/013_apple_g024.npz,013_apple,convex,1.42,0-2,train,1.08111
+EXDIR/episodes_aug/013_apple_g148.npz,013_apple,convex,3.7,2-5,train,1.33769
+EXDIR/episodes_aug/013_apple_g101.npz,013_apple,convex,4.44,2-5,train,1.33769
+EXDIR/episodes_aug/048_hammer_g087.npz,048_hammer,concave,9.55,5-15,heldout_object,1.0
+EXDIR/episodes_aug/048_hammer_g089.npz,048_hammer,concave,10.94,5-15,heldout_object,1.0
+EXDIR/episodes_aug/048_hammer_g084.npz,048_hammer,concave,30.28,30+,heldout_object,1.0
