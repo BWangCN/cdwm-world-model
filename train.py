@@ -17,6 +17,7 @@ sys.path.insert(0, BASE); sys.path.insert(0, os.path.dirname(os.path.abspath(__f
 import importlib
 import my_config as C
 from wm.dit import DiTWM, cosine_acp, ddim_sample
+from wm.dit_local import DiTWMLocal, DiTWMCov, DiTWMLR
 from wm.common import sixd_to_R, geodesic_deg
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 
@@ -66,8 +67,12 @@ def main():
     ap.add_argument("--dim", type=int, default=256); ap.add_argument("--depth", type=int, default=4)
     ap.add_argument("--patience", type=int, default=100000); ap.add_argument("--eval_every", type=int, default=20)
     ap.add_argument("--epoch_draws", type=int, default=1024); ap.add_argument("--ckpt_every", type=int, default=0)   # save ep{N}.pt series for dir_err-vs-epoch
-    ap.add_argument("--dataset_mod", default="my_dataset")   # swappable dataset (my_dataset | my_dataset_frame | ...) — the ONLY A/B variable
+    ap.add_argument("--dataset_mod", default="my_dataset")   # swappable dataset (my_dataset | my_dataset_frame | my_dataset_hf | ...)
+    ap.add_argument("--arch", default="dit", choices=["dit", "dit_local", "dit_cov", "dit_lr"])   # dit_local=grasp-local; dit_cov=cov+global-pool; dit_lr=L/R finger pools (pts N,16)
+    ap.add_argument("--n_feat", type=int, default=0)   # override point-MLP input dim (e.g. 13 for gripper-as-pointcloud); 0 = infer from arch
     a = ap.parse_args(); dev = "cuda" if torch.cuda.is_available() else "cpu"; LAM = a.lam_aux
+    Model = {"dit": DiTWM, "dit_local": DiTWMLocal, "dit_cov": DiTWMCov, "dit_lr": DiTWMLR}[a.arch]
+    NFEAT = a.n_feat if a.n_feat else (13 if a.arch in ("dit_local", "dit_cov", "dit_lr") else C.N_FEAT)
     _DS = importlib.import_module(a.dataset_mod); ChunkDS, load_rows, compute_stats = _DS.ChunkDS, _DS.load_rows, _DS.compute_stats
     torch.manual_seed(a.seed); np.random.seed(a.seed)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(a.seed)
@@ -79,8 +84,8 @@ def main():
     sd_t = torch.tensor(sd, device=dev, dtype=torch.float32); mu_t = torch.tensor(mu, device=dev, dtype=torch.float32)
     DStr = ChunkDS(tr, a.H, stats=stats, seed=a.seed); DSva = ChunkDS(va, a.H, stats=stats, fixed_subsample=True)
     DSho = ChunkDS(ho, a.H, stats=stats, fixed_subsample=True)
-    log(f"[s{a.seed} lam={LAM} var={a.var}] n_feat={C.N_FEAT} train {len(tr)} valgrasp {len(va)} heldobj {len(ho)}")
-    model = DiTWM(n_feat=C.N_FEAT, H=a.H, D=a.dim, depth=a.depth).to(dev)
+    log(f"[s{a.seed} lam={LAM} var={a.var} arch={a.arch}] n_feat={NFEAT} train {len(tr)} valgrasp {len(va)} heldobj {len(ho)}")
+    model = Model(n_feat=NFEAT, H=a.H, D=a.dim, depth=a.depth).to(dev)
     npar = sum(p.numel() for p in model.parameters()); log(f"{npar/1e6:.2f}M params")
     acp = cosine_acp(a.T, device=dev); opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=a.epochs)
@@ -116,7 +121,7 @@ def main():
             bs = b["target"].shape[0]; tot += l.item()*bs; tle += float(le)*bs; tla += float(la)*bs; n += bs
         return (tot/n, tle/n, tla/n) if n else (float("nan"),)*3
 
-    def save(p, **e): torch.save({"model": model.state_dict(), "H": a.H, "T": a.T, "dim": a.dim, "depth": a.depth, "n_feat": C.N_FEAT, "lam_aux": LAM, **e}, p)
+    def save(p, **e): torch.save({"model": model.state_dict(), "H": a.H, "T": a.T, "dim": a.dim, "depth": a.depth, "n_feat": NFEAT, "arch": a.arch, "lam_aux": LAM, **e}, p)
     batch = a.batch; dltr = mk_loader(batch); t0 = time.time(); best = 1e9; bgeo = 1e9; pat = 0; ep = 0; lc = t0; curve = []; geo_curve = []
     while ep < a.epochs and (time.time() - t0) / 60 < a.time_budget_min:
         try:
