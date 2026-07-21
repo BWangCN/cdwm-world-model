@@ -91,16 +91,17 @@ before building anything.**
 ## TODO list (gated order per converged plan — cheapest disproof first)
 
 **Gate A — is CoG diversity even worth building? (do BEFORE any full dataset work)**
-- [x] **T0 Survey** — object inventory + current masses. *(done this turn; table above.)*
-- [ ] **T1 Source real masses** — `object_mass.csv` (object → mass_kg, source, confidence) from the YCB table + GSO
-      metadata + any existing MJCF ports; flag which need deduced/material-prior values. Cheap, reusable at every level.
-- [ ] **T2 MJCFs for the pilot objects only** — need per-object CoACD MJCFs to edit density. Pilot subset first: request
-      `assets573` MJCFs from colleague, or regenerate from `objects/<id>/mesh.obj` (we have the meshes) via CoACD +
-      `obj2mjcf`. Don't do all 80 yet.
-- [ ] **T3 MuJoCo density mechanics** — confirm CoM/inertia wiring: per-geom `<geom density>` (main) vs explicit
-      `<inertial pos mass diaginertia>` (ablation). Verify by loading a patched MJCF and reading `model.body_mass` /
-      `model.body_ipos` (CoM in body frame); assert a per-hull density change moves `body_ipos` as intended.
-      One small `test_density.py`.
+- [x] **T0 Survey** — object inventory + current masses. *(done; `density/object_inventory.csv`.)*
+- [x] **T1 Source real masses** — `density/object_inventory.csv` filled. **24/24 YCB** matched to real masses from
+      [`elpis-lab/ycb_dataset`](https://github.com/elpis-lab/ycb_dataset) (`ycb_mass_elpis.json`); proxy off >15% for 18/24
+      (hammer 2×, cups way over). 56 GSO left at proxy, flagged for Gate-B metadata/priors (pilot uses YCB).
+- [ ] **T2 MJCFs for the pilot objects only** — need per-object CoACD MJCFs to edit density. **Shortcut found:**
+      `elpis-lab/ycb_dataset` ships ready `ycb/<obj>.xml` + 5 CoACD hulls/object (drop its placeholder `<inertial>`, set
+      per-geom `density`). Else colleague `assets573`, or regen from `objects/<id>/mesh.obj` via CoACD + `obj2mjcf`.
+- [x] **T3 MuJoCo density mechanics** — **PROVEN** by `density/test_density.py` (mujoco 2.3.7): uniform density → CoM at
+      centroid *independent of value* (1000 vs 5000 → CoM 0.0000, mass ×5); per-geom hetero density → CoM = analytic
+      mass-weighted centroid (8000/1000 → −0.389). `<geom density>` = main knob, `<inertial>` offset = ablation.
+      *(Primitive 2-box stand-in; real-hull confirm folds into T2/T4.)*
 - [ ] **T4 A/B PILOT (the go/no-go)** — ~4–6 high-leverage shapes (hammer/tool, bottle/can, asymmetric concave, flat
       unstable). Sweep physically-plausible per-hull CoM maps, re-drop a handful of release poses each, measure
       **basin-transition rate + final-pose entropy** uniform vs CoM-shifted. **If the effect is weak → STOP, do not build
