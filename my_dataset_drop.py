@@ -48,10 +48,10 @@ def build_feats_drop(mu, Sig_obj, opacity, ic, R_rel, frame="release"):
     """Cloud in the gravity-aligned release frame. Returns (feat[N,13], pool_weight[N]).
     feat = [mu_r(3) | Sig_tri(6) | opacity(1) | ic(1) | height_above_lowest(1) | horiz_radius(1)].
     Contact analogue of the gripper d_perp = height above the object's lowest point (the support patch)."""
-    Rf = R_rel if frame == "release" else np.eye(3)
+    Rf = (R_rel if frame == "release" else np.eye(3)).astype(np.float32)   # float32: covariance rotation is the hot path
     c = mu.mean(0)
-    mu_r = ((mu - c) @ Rf.T).astype(np.float64)            # centered, rotated into release orientation
-    Sig_r = np.einsum("ij,njk,lk->nil", Rf, Sig_obj.astype(np.float64), Rf)
+    mu_r = (mu - c) @ Rf.T                                  # centered, rotated into release orientation (f32)
+    Sig_r = np.einsum("ij,njk,lk->nil", Rf, Sig_obj, Rf)   # Sig_obj already f32
     tri = np.stack([Sig_r[:, 0, 0], Sig_r[:, 1, 1], Sig_r[:, 2, 2],
                     Sig_r[:, 0, 1], Sig_r[:, 0, 2], Sig_r[:, 1, 2]], 1)
     height = (mu_r[:, 2] - mu_r[:, 2].min())[:, None]       # above lowest point (table contact) -> pool weight
@@ -90,10 +90,22 @@ class DropDS(Dataset):
         rows = [(i, r) for i, r in enumerate(allrows)
                 if r["split"] == split and r["has_cloud"] == "True"
                 and (not settled_only or r["valid_training"] == "True")]
-        self.gi = [i for i, _ in rows]; self.rows = [r for _, r in rows]
+        self.gi = np.array([i for i, _ in rows]); self.rows = [r for _, r in rows]
         self.mod, self.frame, self.n = modality, frame, n_points
         self.fmean, self.fstd = _ensure_stats(allrows, self.poses, frame)
         self.clc, self.rng, self.fixed = {}, np.random.default_rng(seed), (split != "train")
+        # precompute per-episode rotations/targets ONCE (Codex: keep quat_to_R/R_to_6d out of the hot path)
+        rq = self.poses["release_quat"][self.gi].astype(np.float64)
+        R_rel = quat_to_R(rq); R_rest = quat_to_R(self.poses["rest_quat"][self.gi].astype(np.float64))
+        self.R_rel = R_rel.astype(np.float32)
+        dR = np.einsum("nij,nkj->nik", R_rest, R_rel)          # R_rest @ R_rel^T (world reorientation)
+        self.rest6d = R_to_6d(dR).astype(np.float32)
+        dh = np.array([float(r["drop_h"]) for r in self.rows], np.float32)[:, None]
+        tl = (np.array([float(r["tilt_deg"]) for r in self.rows], np.float32) / 15.0)[:, None]
+        self.base_rel = np.concatenate([dh, tl, R_to_6d(R_rel).astype(np.float32),
+                                        np.zeros((len(self.rows), 1), np.float32)], 1)
+        self.y_bt = np.array([int(r["basin_transition"] == "True") for r in self.rows])
+        self.netrot = np.array([float(r["net_rot_from_release_deg"]) for r in self.rows], np.float32)
 
     def _cl(self, o):
         if o not in self.clc: self.clc[o] = _raw_cloud(o)
@@ -102,25 +114,19 @@ class DropDS(Dataset):
     def __len__(self): return len(self.rows)
 
     def labels(self):                                      # for class-balanced sampler
-        return np.array([int(r["basin_transition"] == "True") for r in self.rows])
+        return self.y_bt
 
     def __getitem__(self, j):
-        r = self.rows[j]; gi = self.gi[j]; o = r["object"]; rc = self._cl(o)
-        R_rel = quat_to_R(self.poses["release_quat"][gi].astype(np.float64))
-        R_rest = quat_to_R(self.poses["rest_quat"][gi].astype(np.float64))
-        dR = R_rest @ R_rel.T                              # world reorientation release->rest
-        rng = np.random.default_rng(7000 + gi) if self.fixed else self.rng
+        o = self.rows[j]["object"]; rc = self._cl(o)
+        rng = np.random.default_rng(7000 + int(self.gi[j])) if self.fixed else self.rng
         idx = rng.choice(len(rc["mu"]), self.n, replace=len(rc["mu"]) < self.n)
-        feat, w = build_feats_drop(rc["mu"][idx], rc["Sig_obj"][idx], rc["opacity"][idx], rc["ic"][idx], R_rel, self.frame)
+        feat, w = build_feats_drop(rc["mu"][idx], rc["Sig_obj"][idx], rc["opacity"][idx], rc["ic"][idx],
+                                   self.R_rel[j], self.frame)
         feat = (feat - self.fmean) / self.fstd
         if self.mod == "pose_only": feat = np.zeros_like(feat); w = np.zeros_like(w)
         pts = np.concatenate([feat, w[:, None]], 1).astype(np.float32)
-        # release config in base_rel (kept even in pose_only): drop_h, tilt, release orientation (6D)
-        base_rel = np.concatenate([[float(r["drop_h"]), float(r["tilt_deg"]) / 15.0], R_to_6d(R_rel)]).astype(np.float32)
-        base_rel = np.concatenate([base_rel, np.zeros(9 - len(base_rel), np.float32)])
-        return dict(pts=torch.from_numpy(pts), base_rel=torch.from_numpy(base_rel),
+        return dict(pts=torch.from_numpy(pts), base_rel=torch.from_numpy(self.base_rel[j]),
                     closing=torch.zeros(C.H, dtype=torch.float32), table=torch.zeros(1),
-                    y_bt=int(r["basin_transition"] == "True"),
-                    netrot=torch.tensor(float(r["net_rot_from_release_deg"]), dtype=torch.float32),
-                    rest6d=torch.from_numpy(R_to_6d(dR).astype(np.float32)),
-                    object=o)
+                    y_bt=int(self.y_bt[j]),
+                    netrot=torch.tensor(float(self.netrot[j]), dtype=torch.float32),
+                    rest6d=torch.from_numpy(self.rest6d[j]), object=o)

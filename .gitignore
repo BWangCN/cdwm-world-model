@@ -22,3 +22,4 @@ eval_hf_*.json
 # ship released model weights (override the *.pt/*.npz ignores above)
 !models/**/*.pt
 !models/**/*.npz
+drop_runs/

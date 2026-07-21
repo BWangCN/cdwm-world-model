@@ -31,12 +31,12 @@ def auroc(scores, y):                                      # rank-based AUROC (b
 
 @torch.no_grad()
 def evaluate(model, ds, dev, bs=512, max_batches=None):
-    dl = DataLoader(ds, bs, shuffle=False, num_workers=6)
+    dl = DataLoader(ds, bs, shuffle=False, num_workers=6, pin_memory=True)
     model.eval(); BT, P, GEO, GEO0, OBJ = [], [], [], [], []
     for bi, b in enumerate(dl):
         if max_batches and bi >= max_batches: break
-        lbt, rot = model(b["pts"].to(dev), b["base_rel"].to(dev), b["closing"].to(dev), b["table"].to(dev))
-        Rp = sixd_to_R(rot); Rg = sixd_to_R(b["rest6d"].to(dev))
+        lbt, rot = model(b["pts"].to(dev, non_blocking=True), b["base_rel"].to(dev, non_blocking=True), b["closing"].to(dev, non_blocking=True), b["table"].to(dev, non_blocking=True))
+        Rp = sixd_to_R(rot); Rg = sixd_to_R(b["rest6d"].to(dev, non_blocking=True))
         I = torch.eye(3, device=dev).expand_as(Rg)
         GEO.append(geodesic(Rp, Rg).cpu()); GEO0.append(geodesic(I, Rg).cpu())   # model vs no-motion
         P.append(torch.softmax(lbt, 1)[:, 1].cpu()); BT.append(b["y_bt"]); OBJ += list(b["object"])
@@ -69,7 +69,7 @@ def main():
     freq = np.bincount(y, minlength=2); wbt = torch.tensor((freq.sum() / (2 * np.maximum(freq, 1))).astype(np.float32)).to(dev)
     sampw = (1.0 / np.maximum(freq, 1))[y]
     sampler = WeightedRandomSampler(torch.as_tensor(sampw), len(y), replacement=True)
-    dltr = DataLoader(tr, a.bs, sampler=sampler, num_workers=8, drop_last=True, persistent_workers=True)
+    dltr = DataLoader(tr, a.bs, sampler=sampler, num_workers=8, drop_last=True, persistent_workers=True, pin_memory=True)
 
     model = DropNet().to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
@@ -78,9 +78,9 @@ def main():
     for ep in range(a.epochs):
         model.train()
         for bi, b in enumerate(dltr):
-            lbt, rot = model(b["pts"].to(dev), b["base_rel"].to(dev), b["closing"].to(dev), b["table"].to(dev))
-            Rg = sixd_to_R(b["rest6d"].to(dev))
-            loss = F.cross_entropy(lbt, b["y_bt"].to(dev), weight=wbt) + a.lam * rot_loss(rot, Rg)
+            lbt, rot = model(b["pts"].to(dev, non_blocking=True), b["base_rel"].to(dev, non_blocking=True), b["closing"].to(dev, non_blocking=True), b["table"].to(dev, non_blocking=True))
+            Rg = sixd_to_R(b["rest6d"].to(dev, non_blocking=True))
+            loss = F.cross_entropy(lbt, b["y_bt"].to(dev, non_blocking=True), weight=wbt) + a.lam * rot_loss(rot, Rg)
             opt.zero_grad(); loss.backward(); opt.step()
             if a.smoke and bi >= 3: break
         sch.step()
