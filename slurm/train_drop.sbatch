@@ -23,5 +23,5 @@ read MOD FRAME <<< "${CFG[$SLURM_ARRAY_TASK_ID]}"
 TAG="${MOD}_${FRAME}"
 echo "=== drop-wm $TAG (mod=$MOD frame=$FRAME) | $(hostname) $(date) ==="
 nvidia-smi -L
-CDWM_MODALITY=$MOD python train_drop.py --tag "$TAG" --frame "$FRAME" --epochs 40 --bs 256 --seed 0
+CDWM_MODALITY=$MOD python -u train_drop.py --tag "$TAG" --frame "$FRAME" --epochs 40 --bs 256 --seed 0
 echo "=== done $TAG $(date) ==="
