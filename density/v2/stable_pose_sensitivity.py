@@ -53,7 +53,9 @@ def analyze(obj):
     for ai in range(3):
         T1, P1 = stable(m, c + OFFSET_FRAC * half[ai] * vt[ai])
         tvs.append(tv(h0, down_hist(T1, P1)))
+    isotropy = float(half.min() / half.max())        # ~1 => near-round (rests anywhere; CoM/TV meaningless)
     return dict(object=obj, n_stable=len(P0), n_eff=round(n_eff, 1), pmax=round(float(P0.max()), 2),
+                isotropy=round(isotropy, 2),
                 tv_long=round(tvs[0], 2), tv_mid=round(tvs[1], 2), tv_short=round(tvs[2], 2),
                 tv_max=round(max(tvs), 2), long_mm=round(float(half[0]) * 2000, 1))
 
@@ -67,8 +69,9 @@ def main():
             if r: rows.append(r)
         except Exception as e:
             print(f"  {o}: ERR {e}")
-    # CoM-sensitive AND meaningful = high TV with FEW well-separated poses (n_eff small); round objects flagged
-    for r in rows: r["degenerate"] = r["n_eff"] > 8          # ~round: rests anywhere, TV meaningless
+    # CoM-sensitive AND meaningful = high TV with FEW well-separated poses; round objects flagged (TV meaningless there)
+    # near-round caught two ways: many near-equal poses (n_eff>8) OR near-isotropic geometry (isotropy>0.7, e.g. balls)
+    for r in rows: r["degenerate"] = r["n_eff"] > 8 or r["isotropy"] > 0.7
     outp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stable_pose_sensitivity.csv")
     with open(outp, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys())); w.writeheader(); w.writerows(rows)
