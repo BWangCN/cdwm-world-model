@@ -102,20 +102,34 @@ before building anything.**
       centroid *independent of value* (1000 vs 5000 → CoM 0.0000, mass ×5); per-geom hetero density → CoM = analytic
       mass-weighted centroid (8000/1000 → −0.389). `<geom density>` = main knob, `<inertial>` offset = ablation.
       *(Primitive 2-box stand-in; real-hull confirm folds into T2/T4.)*
-- [ ] **T4 A/B PILOT (the go/no-go)** — ~4–6 high-leverage shapes (hammer/tool, bottle/can, asymmetric concave, flat
-      unstable). Sweep physically-plausible per-hull CoM maps, re-drop a handful of release poses each, measure
-      **basin-transition rate + final-pose entropy** uniform vs CoM-shifted. **If the effect is weak → STOP, do not build
-      the full dataset.** Validate the mini-harness first by reproducing a few shipped L0 rest poses.
+- [x] **T4 A/B PILOT (the go/no-go)** — DONE on the hammer (`density/pilot/`, [`RESULTS.md`](../density/pilot/RESULTS.md)).
+      **Conditional GO** (Codex-converged, session `019f8664`): an 83 mm CoM shift gives **0% basin change in the corpus's
+      stable-pose+small-tilt regime** (shape-dominated, confirms README "mass nearly irrelevant") but is **decisive near
+      stability boundaries** (100% basin disagreement balanced-on-end, 50% at 5° perturbation). **CoG matters only where
+      dynamics are sensitive to it** → adding densities to the *existing* corpus alone changes ~nothing; CoG becomes a
+      hidden latent only if release sampling also visits **near-boundary / metastable** poses.
 
-**Gate B — only if Gate A shows CoM materially moves outcomes**
-- [ ] **T5 Per-hull density maps for all objects** — category templates × hull position, grounded in **real latent
-      states** (fill level, ballast, tool head/handle material). L3 = sample the latent per episode so it is NOT visible
-      in the cloud. Keep an `<inertial>`-offset variant as the ablation knob.
-- [ ] **T6 Full re-simulation** — re-drop the corpus under new MJCFs (colleague's corpus-v1 harness, or scale up the
-      validated mini-harness: condim=6, μ_roll=1e-4, 31.25 Hz, 4 s). Only after T4 justifies the cost.
-- [ ] **T7 CoG-aware WM** — the L3 thesis: geometry + release → a **calibrated distribution** over resting pose (heir of
-      the slip-MDN result), irreducible spread = CoM uncertainty. Report as a distribution (energy score / CRPS), never
-      point-only. **Separate contribution, layered after the baseline drop WM.**
+**Gate A.5 — 4 stress tests BEFORE any dataset engineering (Codex)**
+- [ ] **V1 out-of-plane sensitivity** (2–3 objects) — dense top/bottom vs along-axis shift; does an out-of-plane CoM bias
+      face selection even in the flat regime? (sensitivity bound, mark as stress test.)
+- [ ] **V2 object diversity** — repeat T4 on bottle/can, box, asymmetric toy/tool, flat object; effect must **not** be
+      hammer-only. Include **negative controls** (objects where plausible CoM shifts should not matter).
+- [ ] **V3 boundary-sampler validation** — a sampler that derives high-sensitivity poses from the object's **stable-pose
+      graph / support geometry** (edges/ends/narrow faces/saddles), NOT hand-picked angles.
+- [ ] **V4 distributional necessity** — identical visible observation → genuinely multimodal rest under hidden mass maps,
+      and a **distributional** predictor beats a point predictor on **likelihood/calibration** (not just mean error).
+      *(Go/no-go metric = paired basin-transition probability near objectively-derived boundaries, NOT avg rest-angle.)*
+
+**Gate B — only if Gate A.5 confirms the effect is general + physical**
+- [ ] **T5 Physically-derived near-boundary + heterogeneous-density dataset** — density maps grounded in real latent
+      states (fill level, head/handle material, base-heavy containers, ballast); L3 = sample the latent per episode
+      (not visible in the cloud). Release from V3's boundary sampler. **Report BOTH** natural/stable and boundary
+      distributions; paired counterfactuals; negative controls. Honest claim = "belief-state matters in the *subset* of
+      contacts where hidden inertia controls basin selection", NOT "drops are always multimodal".
+- [ ] **T6 Re-simulation** — colleague's corpus-v1 harness, or scale up the validated mini-harness.
+- [ ] **T7 CoG-aware distributional WM** — geometry + release → a **calibrated distribution** over resting pose (heir of
+      slip-MDN), irreducible spread = CoM uncertainty; energy score / CRPS, never point-only. Separate contribution,
+      **after** the baseline drop WM.
 
 ## Sequencing (where this sits vs the baseline drop WM)
 
