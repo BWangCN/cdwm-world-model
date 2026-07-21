@@ -110,12 +110,19 @@ before building anything.**
       hidden latent only if release sampling also visits **near-boundary / metastable** poses.
 
 **Gate A.5 — 4 stress tests BEFORE any dataset engineering (Codex)**
-- [ ] **V1 out-of-plane sensitivity** (2–3 objects) — dense top/bottom vs along-axis shift; does an out-of-plane CoM bias
-      face selection even in the flat regime? (sensitivity bound, mark as stress test.)
-- [ ] **V2 object diversity** — repeat T4 on bottle/can, box, asymmetric toy/tool, flat object; effect must **not** be
-      hammer-only. Include **negative controls** (objects where plausible CoM shifts should not matter).
-- [ ] **V3 boundary-sampler validation** — a sampler that derives high-sensitivity poses from the object's **stable-pose
-      graph / support geometry** (edges/ends/narrow faces/saddles), NOT hand-picked angles.
+- [x] **V1 out-of-plane sensitivity** — FOLDED into V2: the sweep offsets CoM along **all three** principal axes
+      (long/mid/short), so out-of-plane (mid/short) shifts are covered. Confirmed the basin-relevant direction is often
+      lateral, not along the long axis.
+- [x] **V2 object diversity** — DONE (`density/v2/`, [`RESULTS.md`](../density/v2/RESULTS.md)). Pivoted from noisy drop
+      sims to the **analytic** `stable_pose_sensitivity.py` (trimesh; CoM is an input). Over 558 objects: CoM-sensitivity
+      is a **shape** property — flat objects (plates/cases) CoM-ROBUST (tv≈0.02, 2 stable poses); elongated/asymmetric
+      (spoon/scissors/clamp/mouse/bull) CoM-SENSITIVE (tv≈0.9–1.0). **median tv_max 0.28, 28% >0.5 → not hammer-only.**
+      Key: **`003_cracker_box` tips 40% in corpus but is CoM-ROBUST** → transition rate ≠ CoG-sensitivity (Codex's warning
+      confirmed); target objects by *this* ranking. Negative controls (plates) behave. `drop_sweep.py` kept for dynamical
+      confirmation.
+- [ ] **V3 boundary-sampler validation** — PARTLY IN PLACE: `compute_stable_poses` gives the stable-pose graph analytically
+      (used in V2). Still to do: a sampler that emits releases near the **saddles between adjacent stable poses** and shows
+      those poses have high CoM-sensitivity under tiny perturbations. Refine the degeneracy flag (round-object edge case).
 - [ ] **V4 distributional necessity** — identical visible observation → genuinely multimodal rest under hidden mass maps,
       and a **distributional** predictor beats a point predictor on **likelihood/calibration** (not just mean error).
       *(Go/no-go metric = paired basin-transition probability near objectively-derived boundaries, NOT avg rest-angle.)*
