@@ -120,12 +120,20 @@ before building anything.**
       Key: **`003_cracker_box` tips 40% in corpus but is CoM-ROBUST** → transition rate ≠ CoG-sensitivity (Codex's warning
       confirmed); target objects by *this* ranking. Negative controls (plates) behave. `drop_sweep.py` kept for dynamical
       confirmation.
-- [ ] **V3 boundary-sampler validation** — PARTLY IN PLACE: `compute_stable_poses` gives the stable-pose graph analytically
-      (used in V2). Still to do: a sampler that emits releases near the **saddles between adjacent stable poses** and shows
-      those poses have high CoM-sensitivity under tiny perturbations. Refine the degeneracy flag (round-object edge case).
-- [ ] **V4 distributional necessity** — identical visible observation → genuinely multimodal rest under hidden mass maps,
-      and a **distributional** predictor beats a point predictor on **likelihood/calibration** (not just mean error).
-      *(Go/no-go metric = paired basin-transition probability near objectively-derived boundaries, NOT avg rest-angle.)*
+- [x] **V3 boundary-sampler validation** — DONE (`density/v3v4/`, [`RESULTS.md`](../density/v3v4/RESULTS.md)).
+      Sweeping release from lying-flat to balanced-on-end, CoM-sensitivity is ~0 in the basin and **peaks sharply at the
+      saddle** (θ≈95°: 92% basin disagreement, 179.6° median) → a saddle-targeting sampler finds the CoM-decisive poses;
+      the corpus's θ≈0 sampling sits in the 0% region. (Round-object degeneracy-flag refinement still noted for the
+      analytic V2 tool.)
+- [x] **V4 distributional necessity** — DONE. At the saddle with hidden CoM (plausible prior), a FIXED observation yields
+      **3 rest basins [0.76,0.23,0.01] = genuinely multimodal**; distributional predictor beats point by **1.06 nats NLL**.
+      Point prediction is structurally inadequate → distributional/belief-state WM justified. (Schematic NLL, hammer-only
+      dynamical depth + V2 analytic breadth; a trained distributional-vs-point drop WM is the eventual T7.)
+
+**→ GATE A.5 COMPLETE.** All 4 stress tests pass. CoG diversity validated as a *targeted* contribution (CoM-sensitive
+shapes × near-boundary releases → multimodal outcomes needing a distributional WM); negligible for flat/round objects and
+the corpus as-sampled. Confirmed OFF the baseline-drop-WM critical path. Gate B (T5 boundary+heterogeneous-density dataset,
+T6 re-sim, T7 CoG-aware distributional WM) is now evidence-backed and ready when prioritized after the baseline.
 
 **Gate B — only if Gate A.5 confirms the effect is general + physical**
 - [ ] **T5 Physically-derived near-boundary + heterogeneous-density dataset** — density maps grounded in real latent
