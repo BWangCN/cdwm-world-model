@@ -6,13 +6,13 @@
 #SBATCH --mem=48GB
 #SBATCH --time=4:00:00
 #SBATCH --qos=batch
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:v100:1
 #SBATCH --output=/misc/kcgscratch1/MengyeGroup/yy5259/projects/crus/cdwm-world-model/slurm_outputs/%x_%A_%a.out
 # Baseline drop WM. Array of 3 arms (each varies ONE thing -> no confound):
 #   0 full/release  = cloud in release frame + release params  (the baseline)
 #   1 pose_only/release = cloud zeroed, release params only     (control: is the cloud needed?)
 #   2 full/obj      = cloud in object-canonical frame           (frame ablation: does release-frame help?)
-# ~5M-param encoder, tiny -> any GPU; real cost is the CPU dataloader (12 CPUs). Smoke-verified on CPU.
+# Encoder peaks ~9GB (bs=256 x 4096 pts PointNet) -> needs V100/32GB, NOT an 11GB 2080ti (OOMs). CPU dataloader (12 CPUs).
 #   sbatch --array=0-2 slurm/train_drop.sbatch
 . ~/.bashrc
 cd /misc/kcgscratch1/MengyeGroup/yy5259/projects/crus/cdwm-world-model
