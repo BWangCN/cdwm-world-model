@@ -135,6 +135,15 @@ def main():
                 o = _agg(res["diff_oracle"], mask)
                 print(f"[{lab}] C2 oracle>no-latent: NLL {o['nll'] < d['nll']} ({o['nll']:.3f}v{d['nll']:.3f})  "
                       f"Brier {o['brier'] < d['brier']} ({o['brier']:.3f}v{d['brier']:.3f})")
+    # negative-control specificity: the diff>point advantage should be ~0 on CoM-INSENSITIVE objects
+    negf = os.path.join(HERE, "gateb", "neg_controls.txt")
+    if os.path.exists(negf) and "point" in res and "diff" in res:
+        NEG = set(open(negf).read().split()); neg = np.array([o in NEG for o in te.obj])
+        if neg.any():
+            print("\n[SPECIFICITY] diff<point NLL gain (should be >0 on CoM-sensitive, ~0 on negative controls):")
+            for lab, mask in [("CoM-sensitive", ~neg), ("neg-control", neg)]:
+                p, d = _agg(res["point"], mask), _agg(res["diff"], mask)
+                print(f"    {lab:14s} gain {p['nll'] - d['nll']:+.3f}  (diff {d['nll']:.3f} v point {p['nll']:.3f}, n={int(mask.sum())})")
     mode = os.environ.get("CDWM_GATEB_SPLIT", "object")
     json.dump({a: {"all": _agg(m), "boundary": _agg(m, hi)} for a, m in res.items()},
               open(f"gateb_runs/eval_{mode}.json", "w"), indent=1)
