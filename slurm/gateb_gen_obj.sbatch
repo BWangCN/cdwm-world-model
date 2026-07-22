@@ -13,7 +13,7 @@
 . ~/.bashrc
 cd /misc/kcgscratch1/MengyeGroup/yy5259/projects/crus/cdwm-world-model/gateb
 conda activate dynamo-repro
-OBJ=$(sed -n "$((SLURM_ARRAY_TASK_ID+1))p" objlist.txt)
+OBJ=$(sed -n "$((SLURM_ARRAY_TASK_ID+1))p" "${OBJLIST:-objlist.txt}")
 echo "=== gateb-obj $OBJ | $(hostname) $(date) ==="
 python -u generate_obj.py --obj "$OBJ" --n 2000 --seed 0
 echo "=== done $OBJ $(date) ==="
