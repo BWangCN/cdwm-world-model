@@ -80,5 +80,29 @@ CI-hardened findings** (better than the earlier point-estimate "all six pass"):
    specific to where CoG matters. This is the crisp mechanistic result: *conditioning on the hidden inertial latent
    helps only where that latent controls basin selection.*
 
-Remaining: cross-object transfer (object-disjoint, 19 held-out objects — eval pending arm training); reliability/ECE;
-per-hull *physical* density realism study. The 10-object sections above are the diagnostic ladder that motivated this scale-up.
+### Cross-object transfer (object-disjoint, 19 held-out objects; eval 1105263)
+| comparison | ALL | BOUNDARY |
+|---|---|---|
+| diff < point | **+0.314 [+0.133, +0.489] SIG** | +0.134 [−0.344, +0.442] ns |
+| oracle < diff | +0.009 [−0.016, +0.038] ns | +0.028 [−0.014, +0.077] ns |
+
+**Cross-object diff > point now transfers** (SIG, vs the *failure* at 2 held-out objects: diff 1.20 > point 1.00) → the
+distributional-modeling advantage generalizes to unseen geometries. **But oracle > no-latent does NOT transfer** (ns) →
+the *latent-causality* is object-geometry-specific (knowing the CoM helps only once you've seen how it maps to that
+object's basins). Boundary-subset cross-object margins are ns (wide CIs, 19 objects).
+
+## ★★★ Complete drop-phase verdict (88 objects, both splits, object-bootstrap CIs)
+1. **Distribution > point — significant, large, and transfers to unseen objects.** A general distributional-modeling win
+   (also significant on the CoM-insensitive negative controls, so *not* CoM-specific).
+2. **The hidden CoM is demonstrably causal for known objects** — oracle > no-latent is significant *and specific*
+   (significant on CoM-sensitive objects, null on negative controls). The scale-up (10→88 objects) turned this from
+   underpowered to significant.
+3. **Latent-causality does not yet transfer cross-object** (oracle ns on held-out objects) — an **open problem**: the
+   CoM→basin mapping is object-geometry-specific; transferring it needs more objects or geometry-structured modeling.
+
+**Contribution (honest, CDWM-scoped):** we characterize *when* resting-pose prediction requires a distributional (DiT
+diffusion) world model — a point predictor suffices on natural/deterministic drop, but at near-boundary releases a
+**hidden CoM** makes the outcome multimodal, and (a) a distribution is necessary and generalizes, (b) the hidden inertial
+latent is causally useful where CoG matters. Framing: *hidden-latent distributional prediction* (not "belief-state").
+Remaining: reliability/ECE; per-hull *physical* density realism study; transfer the latent mechanism cross-object.
+The 10-object sections above are the diagnostic ladder that motivated this scale-up.
