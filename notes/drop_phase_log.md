@@ -20,8 +20,19 @@ This file = the drop-phase index; §1–6 below are the original dataset + task 
   no-motion** (2.38° vs 7.45°, non-overlapping CIs; unlike the grasp baseline), basin-transition **AUROC 0.973**; the
   **cloud is essential** (pose-only ≈ chance) and the **release frame halves** the rotation error vs object-frame. The
   drop corpus is a largely well-posed deterministic mapping → point prediction is adequate on the natural corpus.
-- **Next (both agreed, order TBD):** Gate B (CoG-aware *distributional* drop WM — the L3 payoff) · tighten the baseline
-  (transition-enriched eval split for the 44-positive sparsity, stratified `wm/metrics.py` error bands).
+- **Gate B — CoG-aware *distributional* drop WM — DONE** (`gateb/`, `notes/gateb_results.md`). DiT diffusion head vs point
+  vs oracle-latent on 10 CoM-sensitive objects, near-boundary + hidden-CoM. **CI-scoped verdict:** the distribution
+  *significantly* beats the point predictor **and** a basin-frequency baseline on held-out release neighborhoods (+0.21/+0.25
+  NLL, object-bootstrap CIs exclude 0, 9/10 objects) → in this regime a distribution is genuinely better than a point.
+  Oracle-latent (the "CoM is causal" claim) + boundary-subset margins are **directional but not significant at 10 objects**;
+  cross-object transfer **fails** (object-disjoint). Completes the CDWM drop thesis (natural=deterministic/point · boundary
+  hidden-CoM=distribution necessary · cross-object=unsolved).
+- **KEY LIMITATION = OBJECT COUNT.** Gate B used **10** objects; grasp used **171**. The underpowered oracle/boundary CIs and
+  the cross-object failure are both attributable to too few objects. Pool available (from the 558 point-cloud objects, V2-ranked):
+  **104 CoM-sensitive (tv_max≥0.5), 77 strong + few-well-separated-poses (best Gate B candidates), 175 at tv_max≥0.3.**
+- **Next (recommended):** #1 SCALE Gate B to ~50–100+ CoM-sensitive objects (powers oracle-causality + boundary CIs + attempts
+  cross-object transfer) · #2 physical per-hull density (vs the controlled explicit-inertial offset) · #3 rigor (reliability/ECE).
+  Architecture (DiT head) is sound + on-theme (Codex-confirmed) — NOT the bottleneck.
 
 ---
 
