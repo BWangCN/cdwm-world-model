@@ -56,8 +56,9 @@ def generate(n=400, seed=0):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--n", type=int, default=400)
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default="hammer_gateb.npz"); a = ap.parse_args()
-    rel, dh, com, rest = generate(a.n)
+    rel, dh, com, rest = generate(a.n, seed=a.seed)
     labels, K = cluster_basins(rest)
     frac = np.sort(np.bincount(labels) / len(labels))[::-1]
     outp = os.path.join(HERE, a.out)
