@@ -80,6 +80,25 @@ def eval_arm(arm, dev, te, st):
     return {k: np.array(v) for k, v in dict(nll=nll, top1=top1, coverage=cover, entropy=ent, brier=brier).items()}
 
 
+def freq_baseline(te):
+    """strong baseline (Codex): per-object TRAIN marginal P(basin). Diffusion must beat this, not just the point regressor."""
+    tr = GateBDS("train"); Rc = {}; cnt = {}
+    for o in set(tr.obj):
+        if o not in Rc: Rc[o] = len(stables(o))
+        K = Rc[o]; c = np.zeros(K)
+        for bb in tr.basin[tr.obj == o]:
+            if 0 <= bb < K: c[bb] += 1
+        cnt[o] = (c + 0.5) / (c.sum() + 0.5 * K)
+    nll, top1, cover, ent, brier = [], [], [], [], []
+    for i in range(len(te.obj)):
+        o = te.obj[i]; p = cnt.get(o);
+        if p is None: continue
+        K = len(p); t = min(int(te.basin[i]), K - 1); oh = np.zeros(K); oh[t] = 1
+        nll.append(-np.log(p[t])); top1.append(int(p.argmax() == t)); cover.append(1)
+        ent.append(-(p * np.log(p)).sum()); brier.append(((p - oh) ** 2).sum())
+    return {k: np.array(v) for k, v in dict(nll=nll, top1=top1, coverage=cover, entropy=ent, brier=brier).items()}
+
+
 def _agg(m, mask=None):
     s = slice(None) if mask is None else mask
     d = {k: float(np.mean(v[s])) for k, v in m.items()}
@@ -99,11 +118,19 @@ def main():
         ov, bd = _agg(m), _agg(m, hi)
         print(f"  {arm:12s} ALL   nll {ov['nll']:.3f} brier {ov['brier']:.3f} top1 {ov['top1']:.2f} cov {ov['coverage']:.2f} ent {ov['entropy']:.2f}")
         print(f"  {'':12s} BNDRY nll {bd['nll']:.3f} brier {bd['brier']:.3f} top1 {bd['top1']:.2f} cov {bd['coverage']:.2f} ent {bd['entropy']:.2f}")
+    mode0 = os.environ.get("CDWM_GATEB_SPLIT", "object")
+    if mode0 != "object" and "diff" in res:                   # basin-frequency baseline (shared objects only)
+        res["freq"] = freq_baseline(te)
+        fa = _agg(res["freq"]); print(f"  {'freq-base':12s} ALL   nll {fa['nll']:.3f} brier {fa['brier']:.3f} top1 {fa['top1']:.2f}")
     for lab, mask in [("ALL", None), ("BOUNDARY", hi)]:
         if "point" in res and "diff" in res:
             p, d = _agg(res["point"], mask), _agg(res["diff"], mask)
             print(f"\n[{lab}] C3 dist>point: NLL {d['nll'] < p['nll']} ({d['nll']:.3f}v{p['nll']:.3f})  "
                   f"Brier {d['brier'] < p['brier']} ({d['brier']:.3f}v{p['brier']:.3f})")
+            if "freq" in res:
+                f = _agg(res["freq"], mask)
+                print(f"[{lab}] C3b dist>freq-baseline: NLL {d['nll'] < f['nll']} ({d['nll']:.3f}v{f['nll']:.3f})  "
+                      f"Brier {d['brier'] < f['brier']} ({d['brier']:.3f}v{f['brier']:.3f})")
             if "diff_oracle" in res:
                 o = _agg(res["diff_oracle"], mask)
                 print(f"[{lab}] C2 oracle>no-latent: NLL {o['nll'] < d['nll']} ({o['nll']:.3f}v{d['nll']:.3f})  "

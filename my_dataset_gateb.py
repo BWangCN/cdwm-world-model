@@ -36,21 +36,28 @@ def object_split(objs, seed=0):                               # object-disjoint 
     return {o: ("train" if i < ntr else "val" if i < ntr + nva else "test") for i, o in enumerate(uo)}
 
 
-SPLIT_MODE = os.environ.get("CDWM_GATEB_SPLIT", "object")      # 'object' (disjoint) | 'within' (all objs, held-out episodes)
+SPLIT_MODE = os.environ.get("CDWM_GATEB_SPLIT", "object")      # object | within | reldisjoint
 
 
-def _mask_for(OBJ, split):
-    if SPLIT_MODE == "object":
+def _mask_for(OBJ, RELQ, split):
+    if SPLIT_MODE == "object":                                # object-disjoint (hardest: unseen geometry)
         sp = object_split(OBJ); return np.array([sp[o] == split for o in OBJ])
-    r = np.random.default_rng(0).random(len(OBJ))             # within: per-episode 70/15/15, every object in all splits
-    a = np.where(r < 0.7, "train", np.where(r < 0.85, "val", "test"))
-    return a == split
+    if SPLIT_MODE == "within":                                # per-episode random (has release-neighborhood leakage)
+        r = np.random.default_rng(0).random(len(OBJ))
+        return np.where(r < 0.7, "train", np.where(r < 0.85, "val", "test")) == split
+    # reldisjoint: hold out coarse (object, release-orientation cell) NEIGHBORHOODS -> known objects, UNSEEN release regions
+    R6 = R_to_6d(quat_to_R(RELQ.astype(np.float64)))          # (N,6) release orientation
+    cells = [f"{o}|{tuple(c)}" for o, c in zip(OBJ, np.round(R6 * 2).astype(int))]   # ~30deg cells
+    uc = sorted(set(cells)); rng = np.random.default_rng(0); rng.shuffle(uc)
+    ntr, nva = int(0.7 * len(uc)), int(0.15 * len(uc))
+    cs = {c: ("train" if i < ntr else "val" if i < ntr + nva else "test") for i, c in enumerate(uc)}
+    return np.array([cs[c] == split for c in cells])
 
 
 class GateBDS(Dataset):
     def __init__(self, split, n_points=4096, stats=None, seed=0):
         OBJ, RELQ, DH, COM, RESTQ, BAS = _load_all()
-        m = _mask_for(OBJ, split)
+        m = _mask_for(OBJ, RELQ, split)
         self.obj = OBJ[m]; self.dh = DH[m].astype(np.float32); self.com = COM[m]; self.basin = BAS[m]
         Rrel = quat_to_R(RELQ[m].astype(np.float64)); Rrest = quat_to_R(RESTQ[m].astype(np.float64))
         self.R_rel = Rrel.astype(np.float32)
