@@ -104,5 +104,15 @@ object's basins). Boundary-subset cross-object margins are ns (wide CIs, 19 obje
 diffusion) world model — a point predictor suffices on natural/deterministic drop, but at near-boundary releases a
 **hidden CoM** makes the outcome multimodal, and (a) a distribution is necessary and generalizes, (b) the hidden inertial
 latent is causally useful where CoG matters. Framing: *hidden-latent distributional prediction* (not "belief-state").
-Remaining: reliability/ECE; per-hull *physical* density realism study; transfer the latent mechanism cross-object.
-The 10-object sections above are the diagnostic ladder that motivated this scale-up.
+### Strengthening additions (Codex-suggested)
+- **Model-independent causality** (`scripts inline`): because the hidden CoM was sampled *independently of the release*,
+  the unconditional **I(basin; CoM) is the causal effect** (randomized). It is **0.165 bits on CoM-sensitive** objects vs
+  **0.046 on negative controls**, difference **+0.119 [+0.065, +0.172]** (object-bootstrap, excludes 0). So CoM causality
+  holds *without* relying on the oracle model — a data-level randomized-intervention result.
+- **Per-object win table:** diff < point on **88/88 objects** (median gain +0.48, min +0.05) — the distributional advantage
+  is broad, not driven by a few objects.
+- **Bookkeeping:** 89 listed → **88 generated** (`048_hammer` excluded: no valid point-cloud stable-pose set); the set is
+  **76 CoM-sensitive + 12 negative controls**.
+
+Remaining (impact order): reliability/ECE calibration → per-hull *physical* density realism subset → cross-object latent
+transfer (future work). The 10-object sections above are the diagnostic ladder that motivated this scale-up.
