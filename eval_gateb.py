@@ -50,7 +50,7 @@ def eval_arm(arm, dev, te, st):
     mode = os.environ.get("CDWM_GATEB_SPLIT", "object"); pre = "" if mode == "object" else f"{mode}_"
     model.load_state_dict(torch.load(f"gateb_runs/{pre}{arm}/best.pt", map_location=dev)); model.eval()
     acp = cosine_acp(1000, device=dev); Rc = {}
-    nll, top1, cover, ent, brier = [], [], [], [], []
+    nll, top1, cover, ent, brier, ptop = [], [], [], [], [], []
     maxb = int(os.environ.get("GATEB_MAXB", "0"))
     for bi, b in enumerate(DataLoader(te, 128, num_workers=6)):
         if maxb and bi >= maxb: break
@@ -77,7 +77,9 @@ def eval_arm(arm, dev, te, st):
             t = int(truebasin[i]); oh = np.zeros(K); oh[t] = 1
             nll.append(-np.log(p[t])); top1.append(int(p.argmax() == t))
             cover.append(int(bins[t] > 0)); ent.append(-(p * np.log(p)).sum()); brier.append(((p - oh) ** 2).sum())
-    return {k: np.array(v) for k, v in dict(nll=nll, top1=top1, coverage=cover, entropy=ent, brier=brier).items()}
+            ptop.append(float(p.max()))                       # calibration: predicted top-class confidence
+    return {k: np.array(v) for k, v in dict(nll=nll, top1=top1, coverage=cover, entropy=ent,
+                                            brier=brier, ptop=ptop).items()}
 
 
 def freq_baseline(te):
@@ -144,12 +146,24 @@ def main():
             for lab, mask in [("CoM-sensitive", ~neg), ("neg-control", neg)]:
                 p, d = _agg(res["point"], mask), _agg(res["diff"], mask)
                 print(f"    {lab:14s} gain {p['nll'] - d['nll']:+.3f}  (diff {d['nll']:.3f} v point {p['nll']:.3f}, n={int(mask.sum())})")
+    # calibration: ECE (reliability = |confidence - accuracy| over top-confidence bins)
+    def ece(pt, ok, nb=10):
+        e = 0.0
+        for i in range(nb):
+            m = (pt >= i / nb) & (pt < (i + 1) / nb)
+            if m.sum(): e += m.mean() * abs(pt[m].mean() - ok[m].mean())
+        return float(e)
+    print("\n[CALIBRATION] ECE (lower=better) / mean top-confidence / top1 accuracy:")
+    for a in res:
+        if "ptop" in res[a]:
+            print(f"    {a:12s} ECE {ece(res[a]['ptop'], res[a]['top1']):.3f}  conf {res[a]['ptop'].mean():.3f}  acc {res[a]['top1'].mean():.3f}")
     mode = os.environ.get("CDWM_GATEB_SPLIT", "object")
     json.dump({a: {"all": _agg(m), "boundary": _agg(m, hi)} for a, m in res.items()},
               open(f"gateb_runs/eval_{mode}.json", "w"), indent=1)
-    dump = dict(obj=te.obj, boundary=hi)                       # per-episode dump for object-bootstrap CIs + per-object breakdown
+    dump = dict(obj=te.obj, boundary=hi)                       # per-episode dump for object-bootstrap CIs + calibration
     for a in res:
         dump[f"{a}_nll"] = res[a]["nll"]; dump[f"{a}_brier"] = res[a]["brier"]
+        if "ptop" in res[a]: dump[f"{a}_ptop"] = res[a]["ptop"]; dump[f"{a}_top1"] = res[a]["top1"]
     np.savez(f"gateb_runs/eval_pred_{mode}.npz", **dump)
 
 
