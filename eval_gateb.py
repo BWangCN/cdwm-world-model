@@ -138,6 +138,10 @@ def main():
     mode = os.environ.get("CDWM_GATEB_SPLIT", "object")
     json.dump({a: {"all": _agg(m), "boundary": _agg(m, hi)} for a, m in res.items()},
               open(f"gateb_runs/eval_{mode}.json", "w"), indent=1)
+    dump = dict(obj=te.obj, boundary=hi)                       # per-episode dump for object-bootstrap CIs + per-object breakdown
+    for a in res:
+        dump[f"{a}_nll"] = res[a]["nll"]; dump[f"{a}_brier"] = res[a]["brier"]
+    np.savez(f"gateb_runs/eval_pred_{mode}.npz", **dump)
 
 
 if __name__ == "__main__":
