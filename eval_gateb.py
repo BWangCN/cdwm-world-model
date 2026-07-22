@@ -33,7 +33,9 @@ def eval_arm(arm, dev, te, st):
     model.load_state_dict(torch.load(f"gateb_runs/{arm}/best.pt", map_location=dev)); model.eval()
     acp = cosine_acp(1000, device=dev); Rc = {}
     nll, top1, cover, ent = [], [], [], []
-    for b in DataLoader(te, 128, num_workers=6):
+    maxb = int(os.environ.get("GATEB_MAXB", "0"))
+    for bi, b in enumerate(DataLoader(te, 128, num_workers=6)):
+        if maxb and bi >= maxb: break
         pts, br, cl, tb = [b[k].to(dev) for k in ("pts", "base_rel", "closing", "table")]
         B = pts.shape[0]
         Rrel = sixd_to_R(br[:, 1:7]).cpu().numpy()            # release orientation, from base_rel
