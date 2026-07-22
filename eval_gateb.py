@@ -47,7 +47,8 @@ def boundaryness(te, k=40):
 @torch.no_grad()
 def eval_arm(arm, dev, te, st):
     model = (GateBPoint() if arm == "point" else GateBDiT(use_latent=(arm == "diff_oracle"))).to(dev)
-    model.load_state_dict(torch.load(f"gateb_runs/{arm}/best.pt", map_location=dev)); model.eval()
+    mode = os.environ.get("CDWM_GATEB_SPLIT", "object"); pre = "" if mode == "object" else f"{mode}_"
+    model.load_state_dict(torch.load(f"gateb_runs/{pre}{arm}/best.pt", map_location=dev)); model.eval()
     acp = cosine_acp(1000, device=dev); Rc = {}
     nll, top1, cover, ent, brier = [], [], [], [], []
     maxb = int(os.environ.get("GATEB_MAXB", "0"))
@@ -107,7 +108,9 @@ def main():
                 o = _agg(res["diff_oracle"], mask)
                 print(f"[{lab}] C2 oracle>no-latent: NLL {o['nll'] < d['nll']} ({o['nll']:.3f}v{d['nll']:.3f})  "
                       f"Brier {o['brier'] < d['brier']} ({o['brier']:.3f}v{d['brier']:.3f})")
-    json.dump({a: {"all": _agg(m), "boundary": _agg(m, hi)} for a, m in res.items()}, open("gateb_runs/eval.json", "w"), indent=1)
+    mode = os.environ.get("CDWM_GATEB_SPLIT", "object")
+    json.dump({a: {"all": _agg(m), "boundary": _agg(m, hi)} for a, m in res.items()},
+              open(f"gateb_runs/eval_{mode}.json", "w"), indent=1)
 
 
 if __name__ == "__main__":

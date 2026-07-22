@@ -50,7 +50,8 @@ def main():
     a = ap.parse_args(); tag = a.tag or a.arm
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(a.seed); np.random.seed(a.seed)
-    out = f"gateb_runs/{tag}"; os.makedirs(out, exist_ok=True)
+    mode = os.environ.get("CDWM_GATEB_SPLIT", "object"); pre = "" if mode == "object" else f"{mode}_"
+    out = f"gateb_runs/{pre}{tag}"; os.makedirs(out, exist_ok=True)
 
     tr = GateBDS("train", seed=a.seed); va = GateBDS("val", stats=tr.stats)
     print(f"[gateb arm={a.arm}] train {len(tr)} ({len(set(tr.obj))} obj) val {len(va)} ({len(set(va.obj))} obj)")
