@@ -136,11 +136,13 @@ the corpus as-sampled. Confirmed OFF the baseline-drop-WM critical path. Gate B 
 T6 re-sim, T7 CoG-aware distributional WM) is now evidence-backed and ready when prioritized after the baseline.
 
 **Gate B — only if Gate A.5 confirms the effect is general + physical**
-- [ ] **T5 Physically-derived near-boundary + heterogeneous-density dataset** — density maps grounded in real latent
-      states (fill level, head/handle material, base-heavy containers, ballast); L3 = sample the latent per episode
-      (not visible in the cloud). Release from V3's boundary sampler. **Report BOTH** natural/stable and boundary
-      distributions; paired counterfactuals; negative controls. Honest claim = "belief-state matters in the *subset* of
-      contacts where hidden inertia controls basin selection", NOT "drops are always multimodal".
+- [~] **T5 Physically-derived near-boundary + hidden-CoM dataset** — DATASET GENERATED (on icing1 via sbatch,
+      `gateb/generate_obj.py` + `slurm/gateb_gen_obj.sbatch`, job 1105134). 10 CoM-sensitive objects (V2-ranked) ×
+      point-cloud-hull collision (geometry matches the WM cloud) + trimesh stable-pose near-boundary sampler +
+      per-episode HIDDEN CoM (explicit-inertial offset). **12,108 episodes, ALL 10 objects multimodal** (+ hammer
+      11,609). Latent recorded for the oracle comparison. TODO refinements: per-hull *physical* density (vs the
+      controlled explicit offset); low settle on roll-prone objects (mouse 21%, spatula 11%); report natural vs
+      boundary distributions + negative controls at write-up.
 - [ ] **T6 Re-simulation** — colleague's corpus-v1 harness, or scale up the validated mini-harness.
 - [ ] **T7 CoG-aware distributional WM** — geometry + release → a **calibrated distribution** over resting pose (heir of
       slip-MDN), irreducible spread = CoM uncertainty; energy score / CRPS, never point-only. Separate contribution,
