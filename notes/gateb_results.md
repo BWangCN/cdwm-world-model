@@ -58,8 +58,27 @@ Per-object: **diff beats point on 9/10 objects** (only banana regresses) → not
 - **Drop:** point suffices on the natural (deterministic) corpus (beats no-motion); at near-boundary releases with a
   **hidden latent** (CoG), a distribution becomes **necessary** — the point predictor fails, the DiT diffusion wins.
 
-## Remaining rigor (flagged, not run autonomously)
-- Object/release-neighborhood **bootstrap CIs** on the diff−point delta (the boundary-subset NLL margin 1.096 v 1.108 is
-  narrow, though Brier is clear and the direction is consistent across all three splits and both metrics).
-- Reliability/ECE curves; per-object breakdown (confirm the win isn't one or two objects).
-- Per-hull *physical* density (vs the controlled explicit-inertial offset) for the final dataset.
+## ★★★ SCALE-UP to 88 objects (77 CoM-sensitive + 12 negative controls) — FINALIZED, supersedes the 10-object result
+
+134,576 episodes (icing1 job 1105160); retrain reldisjoint job 1105249; eval 1105260. Test = 20,410 eps / 88 held-out
+release neighborhoods; near-boundary subset n=5,107. **Object-bootstrap 95% CIs (the narrow 10-object margins are now
+decisive):**
+
+| comparison | ALL | BOUNDARY | CoM-sensitive | neg-control |
+|---|---|---|---|---|
+| **diff < point** | +0.530 [+0.462,+0.604] **SIG** | +0.406 [+0.330,+0.481] **SIG** | +0.574 **SIG** | +0.300 **SIG** |
+| **oracle < diff** (CoM causal) | +0.015 [+0.005,+0.024] **SIG** | +0.023 [+0.000,+0.047] **SIG** | +0.017 [+0.005,+0.028] **SIG** | +0.002 [−0.001,+0.008] **ns** |
+
+diff also beats the frequency baseline (ALL 0.525 v 0.918, BOUNDARY 1.172 v 1.424). **Upgraded verdict — two clean,
+CI-hardened findings** (better than the earlier point-estimate "all six pass"):
+1. **The diffusion distribution significantly beats point prediction** (and frequency), everywhere, with large margins.
+   But it is *also* significant on the CoM-**insensitive** negative controls (+0.300) → this is a **general
+   distributional-modeling advantage** (diffusion > point regression), **NOT** CoM-specific. Do not claim otherwise.
+2. **The hidden CoM is DEMONSTRABLY CAUSAL — and specifically so.** oracle-latent significantly beats no-latent on
+   CoM-sensitive objects (+0.017 [+0.005,+0.028]) and is **null on the negative controls** (+0.002, ns). The scale-up
+   (10→88 objects) turned this from underpowered to significant, and the negative controls confirm the effect is
+   specific to where CoG matters. This is the crisp mechanistic result: *conditioning on the hidden inertial latent
+   helps only where that latent controls basin selection.*
+
+Remaining: cross-object transfer (object-disjoint, 19 held-out objects — eval pending arm training); reliability/ECE;
+per-hull *physical* density realism study. The 10-object sections above are the diagnostic ladder that motivated this scale-up.
