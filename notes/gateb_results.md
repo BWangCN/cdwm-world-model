@@ -117,5 +117,14 @@ latent is causally useful where CoG matters. Framing: *hidden-latent distributio
 - **Bookkeeping:** 89 listed → **88 generated** (`048_hammer` excluded: no valid point-cloud stable-pose set); the set is
   **76 CoM-sensitive + 12 negative controls**.
 
-Remaining (impact order): reliability/ECE calibration → per-hull *physical* density realism subset → cross-object latent
-transfer (future work). The 10-object sections above are the diagnostic ladder that motivated this scale-up.
+- **Physical-density realism check** (`density/v3v4/physical_density_check.py`, hammer 5-hull CoACD, icing1 job 1105266):
+  replacing the controlled offset with a **physical per-hull material density** (head hollow→steel, 1000–7800 kg/m³,
+  randomized; handle 500) reproduces the effect — **multimodal** rest basins and **I(basin; physical head-density) = 0.161
+  bits**, essentially identical to the controlled-offset CoM causality (0.165). So the controlled explicit-inertial offset
+  is a **faithful proxy for physical mass-distribution variation, not a synthetic artifact.** (Bounded to the hammer; the
+  full 88-object physical version needs CoACD decomposition — a non-blocking infra lift.)
+
+**Rigor status:** all high-value items complete — significance CIs, model-free causality, per-object breadth (88/88),
+calibration (ECE), negative controls, and the physical-density realism check. Remaining (both non-blocking): full-scale
+per-hull physical density (needs CoACD) and cross-object *latent* transfer (future work — the distribution transfers, the
+latent conditioning does not yet). The 10-object sections above are the diagnostic ladder that motivated the scale-up.
