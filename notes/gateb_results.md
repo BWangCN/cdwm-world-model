@@ -111,6 +111,9 @@ latent is causally useful where CoG matters. Framing: *hidden-latent distributio
   holds *without* relying on the oracle model — a data-level randomized-intervention result.
 - **Per-object win table:** diff < point on **88/88 objects** (median gain +0.48, min +0.05) — the distributional advantage
   is broad, not driven by a few objects.
+- **Calibration (ECE, reliability of P(basin)):** the **diffusion is well-calibrated — ECE 0.015** (confidence 0.803 ≈
+  accuracy 0.814); the **point predictor is badly miscalibrated — ECE 0.227** (confidence 0.498 vs accuracy 0.726). So the
+  distributional prediction's uncertainty is *trustworthy*, not just lower-NLL. (oracle ECE 0.016.)
 - **Bookkeeping:** 89 listed → **88 generated** (`048_hammer` excluded: no valid point-cloud stable-pose set); the set is
   **76 CoM-sensitive + 12 negative controls**.
 
