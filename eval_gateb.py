@@ -27,12 +27,29 @@ def stables(o):
     Rs, _ = stable_orientations(DS.hull(o)); return Rs
 
 
+def boundaryness(te, k=40):
+    """data-derived per-episode boundaryness = basin entropy among the k nearest releases (same object). High =
+    a release neighborhood where multiple basins occur under different hidden CoM = where the distribution should win."""
+    score = np.zeros(len(te.obj))
+    for o in set(te.obj):
+        idx = np.where(te.obj == o)[0]
+        Rr = te.R_rel[idx]                                    # (m,3,3)
+        tr = np.einsum("aij,bij->ab", Rr, Rr)                 # tr(Ri Rj^T) (releases share frame -> Ri.Rj elementwise)
+        ang = np.arccos(np.clip((tr - 1) / 2, -1, 1))         # geodesic angle between releases
+        bas = te.basin[idx]
+        for a in range(len(idx)):
+            nn = np.argsort(ang[a])[:k]; b = bas[nn]
+            _, c = np.unique(b, return_counts=True); p = c / c.sum()
+            score[idx[a]] = -(p * np.log(p)).sum()            # local basin entropy
+    return score
+
+
 @torch.no_grad()
 def eval_arm(arm, dev, te, st):
     model = (GateBPoint() if arm == "point" else GateBDiT(use_latent=(arm == "diff_oracle"))).to(dev)
     model.load_state_dict(torch.load(f"gateb_runs/{arm}/best.pt", map_location=dev)); model.eval()
     acp = cosine_acp(1000, device=dev); Rc = {}
-    nll, top1, cover, ent = [], [], [], []
+    nll, top1, cover, ent, brier = [], [], [], [], []
     maxb = int(os.environ.get("GATEB_MAXB", "0"))
     for bi, b in enumerate(DataLoader(te, 128, num_workers=6)):
         if maxb and bi >= maxb: break
@@ -56,31 +73,41 @@ def eval_arm(arm, dev, te, st):
                 q = R.from_matrix(Rrest).as_quat()            # xyzw
                 bins[basin_of(np.r_[q[3], q[:3]], Rs)] += 1
             p = (bins + 0.5) / (bins.sum() + 0.5 * K)          # Laplace-smoothed P(basin)
-            t = int(truebasin[i])
+            t = int(truebasin[i]); oh = np.zeros(K); oh[t] = 1
             nll.append(-np.log(p[t])); top1.append(int(p.argmax() == t))
-            cover.append(int(bins[t] > 0)); ent.append(-(p * np.log(p)).sum())
-    return dict(arm=arm, n=len(nll), nll=float(np.mean(nll)), top1=float(np.mean(top1)),
-                coverage=float(np.mean(cover)), entropy=float(np.mean(ent)))
+            cover.append(int(bins[t] > 0)); ent.append(-(p * np.log(p)).sum()); brier.append(((p - oh) ** 2).sum())
+    return {k: np.array(v) for k, v in dict(nll=nll, top1=top1, coverage=cover, entropy=ent, brier=brier).items()}
+
+
+def _agg(m, mask=None):
+    s = slice(None) if mask is None else mask
+    d = {k: float(np.mean(v[s])) for k, v in m.items()}
+    d["n"] = int(len(m["nll"]) if mask is None else int(mask.sum()))
+    return d
 
 
 def main():
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     te = GateBDS("test"); st = {k: torch.tensor(v, device=dev) for k, v in te.stats.items()}
-    print(f"test: {len(te)} episodes, {len(set(te.obj))} held-out objects")
-    rows = []
+    bnd = boundaryness(te); hi = bnd >= np.quantile(bnd, 0.75)     # boundary subset = top-quartile local basin entropy
+    print(f"test {len(te)} eps, {len(set(te.obj))} held-out objs; near-boundary subset (top-quartile) n={int(hi.sum())}")
+    res = {}
     for arm in ["point", "diff", "diff_oracle"]:
         if not os.path.exists(f"gateb_runs/{arm}/best.pt"): print(f"{arm}: no ckpt, skip"); continue
-        r = eval_arm(arm, dev, te, st); rows.append(r)
-        print(f"  {r['arm']:12s} NLL {r['nll']:.3f}  top1 {r['top1']:.2f}  coverage {r['coverage']:.2f}  entropy {r['entropy']:.2f}")
-    json.dump(rows, open("gateb_runs/eval.json", "w"), indent=1)
-    d = {r["arm"]: r for r in rows}
-    if "point" in d and "diff" in d:
-        print(f"\ncriterion 3 (distribution > point on NLL): {d['diff']['nll'] < d['point']['nll']}  "
-              f"({d['diff']['nll']:.3f} vs {d['point']['nll']:.3f})")
-    if "diff" in d and "diff_oracle" in d:
-        print(f"criterion 2 (oracle > no-latent): NLL {d['diff_oracle']['nll']:.3f} < {d['diff']['nll']:.3f} = "
-              f"{d['diff_oracle']['nll'] < d['diff']['nll']}; entropy {d['diff_oracle']['entropy']:.2f} < "
-              f"{d['diff']['entropy']:.2f} (oracle sharper) = {d['diff_oracle']['entropy'] < d['diff']['entropy']}")
+        m = eval_arm(arm, dev, te, st); res[arm] = m
+        ov, bd = _agg(m), _agg(m, hi)
+        print(f"  {arm:12s} ALL   nll {ov['nll']:.3f} brier {ov['brier']:.3f} top1 {ov['top1']:.2f} cov {ov['coverage']:.2f} ent {ov['entropy']:.2f}")
+        print(f"  {'':12s} BNDRY nll {bd['nll']:.3f} brier {bd['brier']:.3f} top1 {bd['top1']:.2f} cov {bd['coverage']:.2f} ent {bd['entropy']:.2f}")
+    for lab, mask in [("ALL", None), ("BOUNDARY", hi)]:
+        if "point" in res and "diff" in res:
+            p, d = _agg(res["point"], mask), _agg(res["diff"], mask)
+            print(f"\n[{lab}] C3 dist>point: NLL {d['nll'] < p['nll']} ({d['nll']:.3f}v{p['nll']:.3f})  "
+                  f"Brier {d['brier'] < p['brier']} ({d['brier']:.3f}v{p['brier']:.3f})")
+            if "diff_oracle" in res:
+                o = _agg(res["diff_oracle"], mask)
+                print(f"[{lab}] C2 oracle>no-latent: NLL {o['nll'] < d['nll']} ({o['nll']:.3f}v{d['nll']:.3f})  "
+                      f"Brier {o['brier'] < d['brier']} ({o['brier']:.3f}v{d['brier']:.3f})")
+    json.dump({a: {"all": _agg(m), "boundary": _agg(m, hi)} for a, m in res.items()}, open("gateb_runs/eval.json", "w"), indent=1)
 
 
 if __name__ == "__main__":
