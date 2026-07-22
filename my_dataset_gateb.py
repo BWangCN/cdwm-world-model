@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import my_config as C
 from wm.common import quat_to_R, R_to_6d
-from my_dataset_drop import _raw_cloud, build_feats_drop, DERIVED
+from my_dataset_drop import _raw_cloud, build_feats_drop, DERIVED, PCDIR
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GATEB = os.path.join(HERE, "gateb")
@@ -73,10 +73,22 @@ class GateBDS(Dataset):
         self.n = n_points; self.clc = {}; self.rng = np.random.default_rng(seed); self.fixed = (split != "train")
         self.stats = stats if stats is not None else self._compute_stats()
         _fs = np.load(_FEAT_STATS); self.fmean, self.fstd = _fs["mean"], _fs["std"]
+        # cross-object transfer study: how the hidden CoM is fed. none|abstract (base_rel) | grounded|shuffled (per-point)
+        self.latent_mode = os.environ.get("CDWM_GATEB_LATENT", "abstract")
+        self._hc = {}                                          # per-object hull (center, principal axes) to locate the CoM
+        self.com_shuf = self.com[np.random.default_rng(1).permutation(len(self.com))]   # wrong-CoM control (shuffled)
 
     def _cl(self, o):
         if o not in self.clc: self.clc[o] = _raw_cloud(o)
         return self.clc[o]
+
+    def _hull(self, o):                                        # match generate_obj/drop_sweep.hull (subsample seed 0)
+        if o in self._hc: return self._hc[o]
+        from scipy.spatial import ConvexHull
+        mu = np.load(f"{PCDIR}/{o}.npz")["mu"].astype(np.float64)
+        if len(mu) > 4000: mu = mu[np.random.default_rng(0).choice(len(mu), 4000, replace=False)]
+        V = mu[ConvexHull(mu).vertices]; hc = V.mean(0); _, _, vt = np.linalg.svd(V - hc)
+        self._hc[o] = (hc.astype(np.float32), vt.astype(np.float32)); return self._hc[o]
 
     def _compute_stats(self):
         _s = os.path.join(GATEB, f"gateb_target_stats_{SPLIT_MODE}.npz")
@@ -90,10 +102,18 @@ class GateBDS(Dataset):
     def __getitem__(self, j):
         o = self.obj[j]; rc = self._cl(o)
         rng = np.random.default_rng(7000 + j) if self.fixed else self.rng
-        idx = rng.choice(len(rc["mu"]), self.n, replace=len(rc["mu"]) < self.n)
-        feat, w = build_feats_drop(rc["mu"][idx], rc["Sig_obj"][idx], rc["opacity"][idx], rc["ic"][idx], self.R_rel[j], "release")
+        idx = rng.choice(len(rc["mu"]), self.n, replace=len(rc["mu"]) < self.n); mu = rc["mu"][idx]
+        feat, w = build_feats_drop(mu, rc["Sig_obj"][idx], rc["opacity"][idx], rc["ic"][idx], self.R_rel[j], "release")
         feat = (feat - self.fmean) / self.fstd               # standardize cloud feats (drop release-frame stats)
-        pts = np.concatenate([feat, w[:, None]], 1).astype(np.float32)
+        parts = [feat]
+        if self.latent_mode in ("grounded", "shuffled"):     # geometry-grounded CoM: per-point vector-to-CoM (3) + dist (1)
+            com = self.com_shuf[j] if self.latent_mode == "shuffled" else self.com[j]
+            hc, axes = self._hull(o); com_obj = hc + float(com[1]) * axes[int(com[0])]
+            c = mu.mean(0); Rf = self.R_rel[j]
+            mu_r = (mu - c) @ Rf.T; com_r = (com_obj - c) @ Rf.T
+            vec = com_r[None, :] - mu_r; dist = np.linalg.norm(vec, axis=1, keepdims=True)
+            parts.append(np.concatenate([vec, dist], 1).astype(np.float32))
+        pts = np.concatenate(parts + [w[:, None]], 1).astype(np.float32)
         tgt = np.clip((self.target[j] - self.stats["mean"]) / self.stats["std"], -8, 8).astype(np.float32)
         return dict(pts=torch.from_numpy(pts), base_rel=torch.from_numpy(self.base_rel[j]),
                     closing=torch.zeros(1, dtype=torch.float32), table=torch.zeros(1),
