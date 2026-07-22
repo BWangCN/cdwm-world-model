@@ -6,6 +6,25 @@ Dataset: `BWangCN/cdwm-drop-corpus` → downloaded to
 
 ---
 
+## Status / index (updated 2026-07-21)
+
+This file = the drop-phase index; §1–6 below are the original dataset + task analysis. Progress since:
+
+- **Object density / center-of-gravity investigation — COMPLETE** (Gate A + A.5). Full report:
+  [`../density/REPORT.md`](../density/REPORT.md); plan/gates: [`drop_density_todo.md`](drop_density_todo.md); colleague
+  brief (中文): [`drop_density_plan_zh.md`](drop_density_plan_zh.md). Verdict: CoG diversity is a *targeted* contribution
+  (CoM-sensitive shapes × near-boundary releases → multimodal → distributional WM), NOT worth adding to the corpus
+  as-sampled (2.3% near-boundary). Off the baseline critical path → **Gate B** (T5–T7) when prioritized.
+- **Baseline drop WM — COMPLETE.** Results: [`drop_baseline_results.md`](drop_baseline_results.md). Point-prediction
+  reference (`train_drop.py`/`my_dataset_drop.py`/`wm/drop_net.py`/`eval_drop.py`). Held-out test: full/release **beats
+  no-motion** (2.38° vs 7.45°, non-overlapping CIs; unlike the grasp baseline), basin-transition **AUROC 0.973**; the
+  **cloud is essential** (pose-only ≈ chance) and the **release frame halves** the rotation error vs object-frame. The
+  drop corpus is a largely well-posed deterministic mapping → point prediction is adequate on the natural corpus.
+- **Next (both agreed, order TBD):** Gate B (CoG-aware *distributional* drop WM — the L3 payoff) · tighten the baseline
+  (transition-enriched eval split for the 44-positive sparsity, stratified `wm/metrics.py` error bands).
+
+---
+
 ## 1. What the drop corpus is
 
 A **rigid-body drop / placement** world-model dataset: object released above a table → free-fall → impact → settle.
