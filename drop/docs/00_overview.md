@@ -28,8 +28,10 @@ Four arms: `no_latent` | `abstract_oracle` | `grounded_oracle` | `shuffled_oracl
 ## Physical-density realism (`drop.multi_physical_density`)
 Validation that the controlled explicit-inertial offset is a faithful proxy for real mass distribution, not a synthetic artifact. Across 6 CoACD-decomposed real-mesh objects, a randomized heavy-end per-hull **physical density** causally controls the basin in every object (paired near-boundary drops), reproducing the hammer result (I(basin;density) 0.161 vs the controlled-offset 0.165). Effect size tracks shape and is reported as a heuristic-sampled lower bound.
 
-## Demos: the hidden CoM decides the basin
-Same object, same release, sweep the hidden CoM and watch the resting basin flip (rendered from the point-cloud hull, `drop.render_drop_demo`; per-object basin references from `drop.render_basins`).
+## Demos: the hidden CoM decides the basin (physics counterfactuals, NOT model output)
+> These clips are **MuJoCo ground-truth re-simulations, not drop-model rollouts.** They sweep the hidden CoM to show the *causal mechanism* behind the learned basin distribution (same object + release, different hidden CoM → different resting basin). The drop WM predicts the terminal resting pose, so it has no settling video of its own; these motivate *why* the outcome is multimodal and are **not samples from the diffusion model**.
+
+Rendered from the point-cloud hull via `drop.render_drop_demo`; per-object basin references from `drop.render_basins`.
 
 ![banana CoM sweep](../figures/011_banana_com_sweep.gif)
 *Banana: basin 1 → 0 → 0 → 1 across the four swept CoM conditions.*
@@ -44,6 +46,9 @@ Basin indices are the object's stable resting poses ranked by probability (see `
 
 ## Data
 The near-boundary hidden-CoM episodes live under `drop/gateb/*_gateb_s0.npz` (compact: release quaternion, drop height, hidden CoM `[axis, delta]`, resting quaternion, basin). This 13 MB summary **deterministically regenerates the full trajectories** from `com_sim` (the quantized CoM the simulator used) given the point clouds and MuJoCo 2.3.7; `drop/gateb/verify_gateb.py` confirms a 100% basin match. See `drop/gateb/README.md`.
+
+## Scope and limitation
+The drop WM is a **terminal-state distributional world model**: it predicts a calibrated distribution over the *final resting pose / basin*, not the free-fall / impact / settling *trajectory*. In the CDWM family, grasp is an H=32 closing-trajectory WM and slip a K=10 lift-onset rollout WM; drop shares the same encoder but a single-step (H=1) head. Rolling out the settling dynamics for drop — so the model *imagines* the settle and diverges into different basins under different CoM — is a natural extension, not required for the hidden-CoM claim (the free-fall is near-deterministic; the multimodality is in the settle outcome).
 
 ## Reproduce
 ```bash
