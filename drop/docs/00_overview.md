@@ -28,13 +28,17 @@ Four arms: `no_latent` | `abstract_oracle` | `grounded_oracle` | `shuffled_oracl
 ## Physical-density realism (`drop.multi_physical_density`)
 Validation that the controlled explicit-inertial offset is a faithful proxy for real mass distribution, not a synthetic artifact. Across 6 CoACD-decomposed real-mesh objects, a randomized heavy-end per-hull **physical density** causally controls the basin in every object (paired near-boundary drops), reproducing the hammer result (I(basin;density) 0.161 vs the controlled-offset 0.165). Effect size tracks shape and is reported as a heuristic-sampled lower bound.
 
-## GPU consistency
-The reported numbers are GPU-independent: eval is deterministic given seeded sampling, and a V100-vs-TITAN training comparison of an identical config gives +0.013 NLL with a CI including zero (`drop.gpu_ab`). The decisive transfer comparisons are same-GPU by construction.
-
 ## Demos: the hidden CoM decides the basin
 Same object, same release, sweep the hidden CoM and watch the resting basin flip (rendered from the point-cloud hull, `drop.render_drop_demo`; per-object basin references from `drop.render_basins`).
 
 ![banana CoM sweep](../figures/011_banana_com_sweep.gif)
+*Banana: basin 1 → 0 → 0 → 1 across the four swept CoM conditions.*
+
+![medium clamp CoM sweep](../figures/050_medium_clamp_com_sweep.gif)
+*Medium clamp: basin 1 → 1 → 1 → 2.*
+
+![gaming mouse CoM sweep](../figures/Razer_Taipan_Black_Ambidextrous_Gaming_Mouse_com_sweep.gif)
+*Gaming mouse: basin 1 → 1 → 0 → 1.*
 
 Basin indices are the object's stable resting poses ranked by probability (see `../figures/*_basins.png`).
 
@@ -48,3 +52,13 @@ python -m drop.eval_transfer                                               # cro
 python -m drop.eval_transfer_hardening                                     # per-object breakdown + ECE
 MUJOCO_GL=egl python -m drop.render_drop_demo                              # regenerate the demo videos
 ```
+
+## Terminology
+- **no-motion** — trivial baseline: predict the resting pose equals the release pose (the object does not move). The honest floor any model must beat.
+- **basin** — one stable resting pose of the object (which face it settles onto); the `basin` field is the id of the nearest stable pose (see the demos and `*_basins.png`).
+- **Gate B** — the core distributional-WM experiment on CoM-sensitive objects at near-boundary releases (Gate A was the earlier density/CoM feasibility study).
+- **NLL / Brier** — proper scores over the predicted basin distribution, lower is better: negative log-likelihood of the true basin, and squared error of the basin probabilities.
+- **ECE** — expected calibration error: the average gap between predicted confidence and actual accuracy (near 0 = well-calibrated).
+- **I(basin; CoM)** — mutual information; a model-free measure of how much the hidden CoM determines the basin.
+- **arms** — `point` (regressor) · `no_latent` / `diff` (distribution, no CoM) · `abstract_oracle` (CoM as an `[axis, delta]` vector) · `grounded_oracle` (CoM as per-point vector-to-CoM + distance) · `shuffled_oracle` (grounded features but a wrong CoM, the control).
+- **object-disjoint split** — train and test share no objects, so cross-object claims are about genuinely unseen geometry.
