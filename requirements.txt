@@ -1,11 +1,13 @@
 # Core (training / eval / inference)
 torch>=2.1
 numpy>=1.24
-# Eval metrics / analysis
 scipy>=1.10
-# Visualization (viz/): analyze_direction needs matplotlib; render_direction_video additionally needs mujoco + imageio
-#   + our simulation harness (not included — see viz/README.md)
-matplotlib>=3.7
+# Geometry + physics sim (drop data generation, stable poses, physical-density check)
+trimesh>=4.0
+mujoco==2.3.7          # pinned: the drop episodes regenerate deterministically only on this version
+coacd>=1.0            # convex decomposition for the physical-density realism check
+# Visualization / demos (render_drop_demo, render_basins)
 imageio>=2.31
+imageio-ffmpeg>=0.4
 Pillow>=10.0
-# mujoco>=3.0        # only for viz/render_direction_video.py
+matplotlib>=3.7

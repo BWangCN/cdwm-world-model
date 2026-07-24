@@ -1,7 +1,15 @@
 __pycache__/
-*.pyc
-wm_runs/
-viz_out/
-eval/eval_*.json
-*.mp4
+*.py[cod]
 .DS_Store
+*.log
+*.out
+# local training/eval outputs (released weights live in */models/, tracked via LFS)
+*_runs/
+gateb_runs/
+drop_runs/
+wm_runs/
+slurm_outputs/
+wandb/
+# repo-relative dataset root (common/paths.py default; users fetch datasets here, never commit)
+/data/
+/figures/
