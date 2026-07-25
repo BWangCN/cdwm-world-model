@@ -64,7 +64,8 @@ def main():
     objs = sorted(os.path.basename(f).replace("_gateb_s0.npz", "") for f in glob.glob(f"{GATEB_DIR}/*_gateb_s0.npz"))
     objs = [o for o in objs if o != "hammer"]
     haveM = [o for o in objs if os.path.exists(f"{OBJECTS}/{o}/mesh.obj")]
-    print(f"Gate B objects: {len(objs)} | have mesh: {len(haveM)} | point-cloud-only (hull is the only geometry): {len(objs)-len(haveM)}")
+    print(f"Gate B objects: {len(objs)} | local mesh: {len(haveM)} | no LOCAL mesh: {len(objs)-len(haveM)} "
+          f"(these are public GSO/YCB ids, meshes exist upstream but were not downloaded for this study)")
 
     rows = []  # (obj, ratio, n_mesh, n_hull)
     for o in haveM:
