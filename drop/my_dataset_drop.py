@@ -150,3 +150,25 @@ class DropTrajDS(DropDS):
         d = super().__getitem__(j)
         d["traj6d"] = torch.from_numpy(self.traj6d[j])
         return d
+
+
+class DropRollDS(DropTrajDS):
+    """Corpus diffusion-rollout dataset: the SAME K=8 contact->settle anchors as DropTrajDS (comparability), but
+    formatted for GateBDiT(H=K): target (K,9) = [anchor 6d rel release, zero pad], per-channel standardized
+    (the gateb-rollout convention, clip +-8); closing = zeros(K). No latent (the corpus has no hidden CoM)."""
+    def __init__(self, split, stats=None, **kw):
+        super().__init__(split, **kw)
+        n, K = self.traj6d.shape[:2]
+        self.roll_target = np.concatenate([self.traj6d, np.zeros((n, K, 3), np.float32)], -1)   # (n,K,9)
+        if stats is None:
+            T = self.roll_target.reshape(-1, 9)
+            sel = np.random.default_rng(0).choice(len(T), min(20000, len(T)), replace=False)
+            stats = {"mean": T[sel].mean(0).astype(np.float32), "std": (T[sel].std(0) + 1e-4).astype(np.float32)}
+        self.stats = stats
+
+    def __getitem__(self, j):
+        d = super().__getitem__(j)
+        tgt = np.clip((self.roll_target[j] - self.stats["mean"]) / self.stats["std"], -8, 8).astype(np.float32)
+        d["target"] = torch.from_numpy(tgt)                  # (K,9) for GateBDiT(H=K)
+        d["closing"] = torch.zeros(self.K, dtype=torch.float32)
+        return d
