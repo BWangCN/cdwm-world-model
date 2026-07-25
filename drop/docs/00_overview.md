@@ -65,6 +65,10 @@ python -m drop.train_gateb   --arm grounded_oracle --tag grounded_oracle   # tra
 python -m drop.eval_transfer                                               # cross-object transfer eval
 python -m drop.eval_transfer_hardening                                     # per-object breakdown + ECE
 MUJOCO_GL=egl python -m drop.render_drop_demo                              # regenerate the demo videos
+# rollout WM (imagine the settle; K=16 trajectory targets regenerate from com_sim, ~75 MB, not shipped):
+python -m drop.gen_rollout   --obj <object>                                # settling-trajectory targets -> gateb/<obj>_roll_s0.npz
+python -m drop.train_roll    --arm grounded_oracle                         # train the rollout WM (GateBDiT H=16)
+MUJOCO_GL=egl python -m drop.render_roll_pred                              # model rollout vs ground truth (held-out objects)
 ```
 
 ## Terminology

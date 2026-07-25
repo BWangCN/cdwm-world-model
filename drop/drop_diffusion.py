@@ -11,8 +11,8 @@ from common.model import mlp
 
 class GateBDiT(DiTWMLocal):
     """Diffusion head. use_latent=True -> oracle (conditions on the true CoM); False -> no-latent (CoM hidden)."""
-    def __init__(self, n_feat=13, use_latent=False, latent_dim=4, D=256, depth=4, **kw):
-        super().__init__(n_feat=n_feat, H=1, D=D, depth=depth, **kw)
+    def __init__(self, n_feat=13, use_latent=False, latent_dim=4, H=1, D=256, depth=4, **kw):
+        super().__init__(n_feat=n_feat, H=H, D=D, depth=depth, **kw)   # H=1 endpoint | H=K rollout trajectory
         self.use_latent = use_latent
         if use_latent:
             self.lat = mlp([latent_dim, 128, D])
