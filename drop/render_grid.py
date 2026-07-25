@@ -21,8 +21,14 @@ try:
 except Exception:
     FONT = FBIG = ImageFont.load_default()
 
-OBJS = ["Schleich_Spinosaurus_Action_Figure", "Schleich_Hereford_Bull", "051_large_clamp"]
-NICE = {"Schleich_Spinosaurus_Action_Figure": "Spinosaurus", "Schleich_Hereford_Bull": "Bull", "051_large_clamp": "Large clamp"}
+# convex-ish, hull-faithful, held-out objects (hull ~= real -> the textured mesh rests naturally at the
+# predicted hull pose). Chosen from the concavity audit (drop.concavity_audit): volume ratio + stable-pose fidelity.
+OBJS = ["Marc_Anthony_True_Professional_Strictly_Curls_Curl_Defining_Lotion",
+        "Marc_Anthony_Skip_Professional_Oil_of_Morocco_Conditioner_with_Argan_Oil",
+        "028_skillet_lid"]
+NICE = {"Marc_Anthony_True_Professional_Strictly_Curls_Curl_Defining_Lotion": "Curl lotion bottle",
+        "Marc_Anthony_Skip_Professional_Oil_of_Morocco_Conditioner_with_Argan_Oil": "Conditioner bottle",
+        "028_skillet_lid": "Skillet lid"}
 ARM, NF, LM, N = "grounded_oracle", 17, "grounded", 60
 
 

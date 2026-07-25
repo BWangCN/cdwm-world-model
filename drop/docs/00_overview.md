@@ -50,8 +50,20 @@ The near-boundary hidden-CoM episodes live under `drop/gateb/*_gateb_s0.npz` (co
 ## Scope and limitation
 The drop WM is a **terminal-state distributional world model**: it predicts a calibrated distribution over the *final resting pose / basin*, not the free-fall / impact / settling *trajectory*. In the CDWM family, grasp is an H=32 closing-trajectory WM and slip a K=10 lift-onset rollout WM; drop shares the same encoder but a single-step (H=1) head. Rolling out the settling dynamics for drop — so the model *imagines* the settle and diverges into different basins under different CoM — is a natural extension, not required for the hidden-CoM claim (the free-fall is near-deterministic; the multimodality is in the settle outcome). A trained rollout extension is shown next.
 
+### Geometry: the convex-hull scope
+Both the simulator and the world model operate on the object's point-cloud **convex hull**, not a detailed mesh. This is deliberate and, for most of the corpus, forced: of the 89 Gate B objects **60 are point-cloud-only** (no source mesh exists), so the hull is the only geometry that can be built for them; a rigid-body simulator collides convex geometry natively; and the hull is matched to the world model's input cloud, so the model and the simulator share one shape representation with no geometry mismatch between them.
+
+A data-derived audit (`drop.concavity_audit`) over the 29 objects that do have meshes measures how good this approximation is, with two proxies. The **global convexity ratio** (mesh volume over hull volume) has median 0.52 and a natural gap near 0.74. The **contact-facing proxy** counts stable resting modes of the real mesh versus its hull (`trimesh.compute_stable_poses`): the hull loses a **median of only 1 mode** (mean 5.3 vs 4.4), so for most objects it preserves the resting structure; it collapses modes only for a strongly concave minority, where the effect is large (the Hereford bull: 8 modes to 3; a therizinosaurus: 8 to 4). The two proxies correlate only weakly (-0.11): a low volume ratio does not by itself flag the problem objects (a thin plate has ratio 0.06 but loses no modes), whereas the stable-pose proxy does. So the hull is a faithful stand-in for most of the set and fails specifically on legged or handled shapes.
+
+The learned effect is **not an artifact of this approximation**. Stratifying the cross-object transfer gain (no-latent NLL minus grounded NLL) by hull fidelity, the grounded-CoM benefit is positive in every stratum: hull-faithful objects **+0.204**, hull-unfaithful **+0.320**, point-cloud-only **+0.165** (overall +0.181). The mesh-having held-out cells are small (3 faithful, 1 unfaithful object), so this is a robustness check rather than a precise per-stratum estimate, but the result does not collapse on any subset, and the model-free I(basin;CoM) evidence is a statement about the hull's own dynamics that does not depend on mesh fidelity at all.
+
+The honest limitation is **qualitative resting fidelity for concave real objects**. For an object with legs or a handle the hull rests on faces the real object never rests on, so rendering the detailed mesh at a hull-predicted pose looks unnatural even when the predicted hull basin is correct. The figure below shows this for the bull. Faithful resting prediction for such objects is out of the current scope. The natural extension is convex decomposition (CoACD) on the mesh-having subset, with the world model's input cloud **re-sampled from the same decomposed geometry** so the model and simulator stay geometry-consistent; reconstructed meshes for point-cloud-only objects would be a separate, clearly labeled approximation layer.
+
+![scope boundary: the bull rests differently on its real mesh versus its convex hull](../figures/scope_boundary.png)
+*The convex hull collapses the bull's 8 stable resting modes to 3. The simulator and world model reason about the hull (right), a legless blob; the detailed mesh (left) is the object we recognize but never enters the model. Concave objects are out of scope for faithful resting; see the audit.*
+
 ## Model-imagined rollout (extension)
-Beyond the endpoint, a rollout variant (`GateBDiT` with **H=16**, trained on re-simulated settling trajectories) lets the model **imagine the settle itself**. Below, for three **held-out** objects (rendered from their full textured meshes), each row is: the MuJoCo **ground truth** (left), the trained model's **imagined** settle for the same release (middle), and the model's basin samples (right). Under a near-boundary release the samples **diverge into different basins** — the same distribution the endpoint model captures, now made temporal. Genuine model output (contrast the physics-counterfactual demos above).
+Beyond the endpoint, a rollout variant (`GateBDiT` with **H=16**, trained on re-simulated settling trajectories) lets the model **imagine the settle itself**. Below, for three **held-out** objects, each row is: the MuJoCo **ground truth** (left), the trained model's **imagined** settle for the same release (middle), and the model's basin samples (right). Under a near-boundary release the samples **diverge into different basins** — the same distribution the endpoint model captures, now made temporal. Genuine model output (contrast the physics-counterfactual demos above). The three objects (a curl-lotion bottle, a conditioner bottle, a skillet lid) are **convex-ish, hull-faithful** shapes chosen from the concavity audit above, so the textured mesh rests naturally at the predicted hull pose; the scope-boundary figure shows why strongly concave objects (the bull) are excluded.
 
 ![drop rollout grid: three held-out objects, ground truth vs model imagination, samples diverge into different basins](../figures/drop_grid.gif)
 
@@ -62,11 +74,14 @@ Pipeline: `gen_rollout` (trajectory targets from `com_sim`) → `my_dataset_roll
 python -m drop.train_gateb   --arm grounded_oracle --tag grounded_oracle   # train an arm
 python -m drop.eval_transfer                                               # cross-object transfer eval
 python -m drop.eval_transfer_hardening                                     # per-object breakdown + ECE
+python -m drop.concavity_audit                                             # convex-hull scope audit (two proxies)
 MUJOCO_GL=egl python -m drop.render_drop_demo                              # regenerate the demo videos
 # rollout WM (imagine the settle; K=16 trajectory targets regenerate from com_sim, ~75 MB, not shipped):
 python -m drop.gen_rollout   --obj <object>                                # settling-trajectory targets -> gateb/<obj>_roll_s0.npz
 python -m drop.train_roll    --arm grounded_oracle                         # train the rollout WM (GateBDiT H=16)
 MUJOCO_GL=egl python -m drop.render_roll_pred                              # model rollout vs ground truth (held-out objects)
+MUJOCO_GL=egl python -m drop.render_grid                                   # textured GT-vs-model grid (convex held-out objects)
+MUJOCO_GL=egl python -m drop.render_scope                                  # scope-boundary figure (bull: real mesh vs convex hull)
 ```
 
 ## Terminology
