@@ -21,14 +21,13 @@ try:
 except Exception:
     FONT = FBIG = ImageFont.load_default()
 
-# convex-ish, hull-faithful, held-out objects (hull ~= real -> the textured mesh rests naturally at the
-# predicted hull pose). Chosen from the concavity audit (drop.concavity_audit): volume ratio + stable-pose fidelity.
-OBJS = ["Marc_Anthony_True_Professional_Strictly_Curls_Curl_Defining_Lotion",
-        "Marc_Anthony_Skip_Professional_Oil_of_Morocco_Conditioner_with_Argan_Oil",
-        "028_skillet_lid"]
-NICE = {"Marc_Anthony_True_Professional_Strictly_Curls_Curl_Defining_Lotion": "Curl lotion bottle",
-        "Marc_Anthony_Skip_Professional_Oil_of_Morocco_Conditioner_with_Argan_Oil": "Conditioner bottle",
-        "028_skillet_lid": "Skillet lid"}
+# Held-out, hull-faithful objects picked by hull_vs_coacd.py's NEAR-BOUNDARY geom_gap (not the earlier global
+# convexity/stable-pose proxy, which this study showed does NOT predict boundary-regime hull sensitivity: two
+# bottles previously picked by the global proxy actually have LARGE boundary gaps, while large_clamp -- excluded
+# as "concave" by the global proxy -- has one of the SMALLEST gaps in the whole 29-object set).
+OBJS = ["028_skillet_lid", "051_large_clamp", "Marc_Anthony_Skip_Professional_Oil_of_Morocco_Conditioner_with_Argan_Oil"]
+NICE = {"028_skillet_lid": "Skillet lid", "051_large_clamp": "Large clamp",
+        "Marc_Anthony_Skip_Professional_Oil_of_Morocco_Conditioner_with_Argan_Oil": "Conditioner bottle"}
 ARM, NF, LM, N = "grounded_oracle", 17, "grounded", 60
 
 
