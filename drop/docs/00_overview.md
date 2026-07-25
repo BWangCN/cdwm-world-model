@@ -51,13 +51,11 @@ The near-boundary hidden-CoM episodes live under `drop/gateb/*_gateb_s0.npz` (co
 The drop WM is a **terminal-state distributional world model**: it predicts a calibrated distribution over the *final resting pose / basin*, not the free-fall / impact / settling *trajectory*. In the CDWM family, grasp is an H=32 closing-trajectory WM and slip a K=10 lift-onset rollout WM; drop shares the same encoder but a single-step (H=1) head. Rolling out the settling dynamics for drop — so the model *imagines* the settle and diverges into different basins under different CoM — is a natural extension, not required for the hidden-CoM claim (the free-fall is near-deterministic; the multimodality is in the settle outcome). A trained rollout extension is shown next.
 
 ## Model-imagined rollout (extension)
-Beyond the endpoint, a rollout variant (`GateBDiT` with **H=16**, trained on re-simulated settling trajectories) lets the model **imagine the settle itself**. In each clip the top row is the MuJoCo ground truth; the rest are samples from the trained model for the *same* release, each descending and tumbling per the model's *predicted* orientation trajectory to its predicted rest. These are **held-out test objects** (unlike the physics-counterfactual demos above, which can use any object), so this is genuine generalization. Under a near-boundary release the samples **diverge into different basins** — the same distribution the endpoint model captures, now made temporal. Genuine model output.
+Beyond the endpoint, a rollout variant (`GateBDiT` with **H=16**, trained on re-simulated settling trajectories) lets the model **imagine the settle itself**. Below, for three **held-out** objects (rendered from their full textured meshes), each row is: the MuJoCo **ground truth** (left), the trained model's **imagined** settle for the same release (middle), and the model's basin samples (right). Under a near-boundary release the samples **diverge into different basins** — the same distribution the endpoint model captures, now made temporal. Genuine model output (contrast the physics-counterfactual demos above).
 
-![triceratops: model rollout vs ground truth, samples diverge into different basins](../figures/Great_Dinos_Triceratops_Toy_roll_pred.gif)
-![plant bowl: model rollout vs ground truth](../figures/Ecoforms_Plant_Bowl_Atlas_Low_roll_pred.gif)
-![deep bowl: model rollout vs ground truth](../figures/Cole_Hardware_Deep_Bowl_Good_Earth_1075_roll_pred.gif)
+![drop rollout grid: three held-out objects, ground truth vs model imagination, samples diverge into different basins](../figures/drop_grid.gif)
 
-Pipeline: `gen_rollout` (trajectory targets from `com_sim`) → `my_dataset_roll` (RollDS, K=16 target) → `train_roll` (`GateBDiT` H=K) → `render_roll_pred`.
+Pipeline: `gen_rollout` (trajectory targets from `com_sim`) → `my_dataset_roll` (RollDS, K=16 target) → `train_roll` (`GateBDiT` H=K) → `render_grid` (textured-mesh GT-vs-model grid).
 
 ## Reproduce
 ```bash
