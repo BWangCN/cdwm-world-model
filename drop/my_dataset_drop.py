@@ -126,3 +126,27 @@ class DropDS(Dataset):
                     y_bt=int(self.y_bt[j]),
                     netrot=torch.tensor(float(self.netrot[j]), dtype=torch.float32),
                     rest6d=torch.from_numpy(self.rest6d[j]), object=o)
+
+
+class DropTrajDS(DropDS):
+    """Trajectory-supervision arm: same features, target = K=8 anchor orientations (rel. release, 6d) spanning
+    contact-onset -> settle (precompute_droptraj.py; during-fall frames carry zero signal under zero-velocity
+    kinematic release). Anchor K-1 = the final frame = the resting pose, so the endpoint readout is comparable
+    to DropDS.rest6d. All targets precomputed here; the __getitem__ hot path is unchanged."""
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        t = np.load(f"{DERIVED}/drop_traj8.npz")
+        rq_chk = t["release_quat"][self.gi].astype(np.float64)
+        rq_ref = self.poses["release_quat"][self.gi].astype(np.float64)
+        assert np.abs((rq_chk * rq_ref).sum(1)).min() > 0.999, "drop_traj8 rows misaligned with drop_poses"
+        tq = t["traj_quat"][self.gi].astype(np.float64)             # (n,K,4)
+        n, K = tq.shape[:2]
+        Rk = _quat_to_R_batch(tq.reshape(-1, 4)).reshape(n, K, 3, 3)
+        dR = np.einsum("nkij,nlj->nkil", Rk, self.R_rel.astype(np.float64))   # R_k @ R_rel^T per anchor
+        self.traj6d = R_to_6d(dR.reshape(-1, 3, 3)).reshape(n, K, 6).astype(np.float32)
+        self.K = K
+
+    def __getitem__(self, j):
+        d = super().__getitem__(j)
+        d["traj6d"] = torch.from_numpy(self.traj6d[j])
+        return d

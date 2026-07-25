@@ -16,6 +16,9 @@ On the natural corpus the mapping is well posed. Held-out test (object-disjoint)
 
 So on the corpus as sampled, a point prediction is adequate. The interesting failure is the near-boundary, hidden-CoM regime below.
 
+### Does supervising the settle trajectory help? (`drop.train_droptraj`)
+A natural question is whether predicting **intermediate frames** — not just the endpoint — improves the resting-pose prediction. One reduction first: under the corpus's zero-velocity kinematic release, orientation is *constant* during free-fall and height is closed-form ballistics, so during-fall frames carry **no learning signal**; intermediate supervision meaningfully means the **contact-onset → settle transient**. We tested exactly that: same encoder, split, sampler, and protocol as the baseline, only the rotation head changed to K=8 anchor orientations spanning contact onset (detected as the first orientation deviation, which cannot occur before contact) to settle, equal chordal loss, endpoint read from the last anchor. Result, replicated across two seeds (paired per-episode dumps, object-bootstrap over the 12 held-out objects): **transient supervision significantly improves the endpoint** — per-object median gain **+0.28° [+0.08, +0.79]** (seed 0) and **+0.33° [+0.13, +1.07]** (seed 1), better on **10/12** objects in each; overall median **2.38° → 2.01 / 1.91°**. It does **not** improve the ≥15° tail in either seed (paired gain +0.59 [−0.04, +2.42] / +0.74 [−0.88, +1.90], both ns; pooled tail medians unstable across seeds at 16.3° / 21.7°, all ≈ the 16.0° no-motion floor) — the tail failure is *which-way multimodality*, the Gate B distributional model's job, not supervision density. `traj_k8` is therefore the preferred endpoint-head candidate (checkpoint in `drop/models/baseline/traj_k8.pt`); `full_release` remains the reference baseline quoted above.
+
 ## Primary demo: the corpus task (`drop.render_corpus_demo`)
 The formulation, end to end, on three **held-out** objects. Left: the **recorded corpus trajectory replayed** — real free-fall, impact, and settle from `obj_pos`/`obj_quat` at 31.25 Hz, no re-simulation. Middle: the endpoint WM's **predicted resting pose**, computed from the cloud and release parameters alone — before the drop happens. Right: errors, as-is.
 
@@ -86,6 +89,8 @@ Pipeline: `gen_rollout` (trajectory targets from `com_sim`) → `my_dataset_roll
 ## Reproduce
 ```bash
 MUJOCO_GL=egl python -m drop.render_corpus_demo                            # PRIMARY demo (corpus replay vs predicted rest)
+python -m drop.precompute_droptraj                                         # K=8 contact->settle anchors (trajectory arm)
+python -m drop.train_droptraj --tag traj_k8                                # trajectory-supervision arm (endpoint +0.3 deg)
 python -m drop.train_gateb   --arm grounded_oracle --tag grounded_oracle   # train an arm
 python -m drop.eval_transfer                                               # cross-object transfer eval
 python -m drop.eval_transfer_hardening                                     # per-object breakdown + ECE

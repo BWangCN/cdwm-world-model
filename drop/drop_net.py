@@ -32,3 +32,17 @@ class DropNet(nn.Module):
 def rot_loss(rot6d_pred, R_gt):                            # chordal Frobenius on rotation matrices (stable, differentiable)
     Rp = sixd_to_R(rot6d_pred)
     return ((Rp - R_gt) ** 2).sum((-1, -2)).mean()
+
+
+class DropTrajNet(DropNet):
+    """Trajectory-supervision arm: same encoder + bt head; the rotation head outputs K anchor orientations
+    (6d each) spanning contact-onset -> settle. Endpoint = anchor K-1 (the resting pose)."""
+    def __init__(self, K=8, **kw):
+        super().__init__(**kw)
+        D = self.head_rot[0].in_features
+        self.K = K
+        self.head_rot = nn.Sequential(nn.Linear(D, D), nn.GELU(), nn.Linear(D, 6 * K))
+
+    def forward(self, pts, base_rel, closing, table):
+        z = self.enc.encode(pts, base_rel, closing, table)
+        return self.head_bt(z), self.head_rot(z).view(-1, self.K, 6)   # (B,2), (B,K,6)
