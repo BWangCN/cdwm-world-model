@@ -119,12 +119,15 @@ We closed the loop the limitation above calls for: regenerate Gate B on the **Co
 | arm | NLL | top-1 | ECE |
 |---|---|---|---|
 | point | 1.447 | 0.56 | 0.166 |
-| no_latent (distribution) | 1.056 | 0.63 | 0.045 |
-| grounded (hidden CoM) | **0.822** | **0.71** | 0.050 |
+| no_latent (distribution) | 1.057 | 0.63 | 0.042 |
+| abstract-CoM | 1.028 | 0.63 | 0.048 |
+| shuffled-CoM (control) | 1.054 | 0.63 | 0.055 |
+| grounded (hidden CoM) | **0.821** | **0.71** | 0.050 |
 
-- **distribution > point: +0.357 NLL [+0.195, +0.539], significant, 7/7 objects.**
-- **grounded > no_latent (hidden CoM is causal): +0.242 NLL [+0.179, +0.291], significant, 7/7 objects.**
-- Both core claims hold under faithful geometry, so they are **not artifacts of the single-hull approximation**. The CoM-causality gain is in fact **larger** here than on the single hull (+0.242 vs +0.184): faithful multi-hull geometry has more stable resting modes, so the hidden CoM decides the basin more often. (Absolute NLLs are higher than the hull task because the basin space is larger — hull-vs-CoACD numbers are not directly comparable; the *gains* are the claim.)
+- **distribution > point: +0.355 NLL [+0.195, +0.537], significant, 7/7 objects.**
+- **grounded > no_latent (hidden CoM is causal): +0.245 NLL [+0.179, +0.296], significant, 7/7 objects.**
+- **grounded > abstract +0.212** [+0.156, +0.254] and **grounded > shuffled-CoM +0.236** [+0.177, +0.291], both significant 7/7 — the abstract encoding and the wrong-CoM control **both collapse to no_latent** (1.028, 1.054 vs 1.057), so the gain requires the *correct, geometry-grounded* CoM, not extra input channels. The full specificity result replicates on faithful geometry.
+- Both core claims hold under faithful geometry, so they are **not artifacts of the single-hull approximation**. The CoM-causality gain is in fact **larger** here than on the single hull (+0.245 vs +0.184): faithful multi-hull geometry has more stable resting modes, so the hidden CoM decides the basin more often. (Absolute NLLs are higher than the hull task because the basin space is larger — hull-vs-CoACD numbers are not directly comparable; the *gains* are the claim.)
 
 ## Model-imagined rollout — Gate B hidden-CoM regime (extension)
 > Distinct from the corpus diffusion rollout above: that one imagines the settle on the **natural corpus** (flat rests, no hidden CoM); this one is the **Gate B near-boundary regime** — per-episode hidden CoM, point-cloud-hull physics — so its diverging basins come from a *shifted hidden CoM* rather than shape+release alone, and resting poses can sit off-flat by construction.

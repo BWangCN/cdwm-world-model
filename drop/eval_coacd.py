@@ -19,9 +19,11 @@ from drop.eval_gateb import boundaryness
 from scipy.spatial.transform import Rotation as R
 
 N_SAMP = 60
-ARMS = {"point": ("none", None, "coacd_point"),
-        "no_latent": ("none", 13, "coacd_nolatent"),
-        "grounded": ("grounded", 17, "coacd_grounded")}
+ARMS = {"point": ("none", None, "coacd_point", False),
+        "no_latent": ("none", 13, "coacd_nolatent", False),
+        "grounded": ("grounded", 17, "coacd_grounded", False),
+        "abstract": ("abstract", 13, "coacd_abstract", True),      # specificity: abstract CoM (should NOT transfer)
+        "shuffled": ("shuffled", 17, "coacd_shuffled", False)}     # specificity: wrong-CoM control
 _MS = {}
 
 
@@ -32,11 +34,11 @@ def stables_mesh(o):                                          # basin frame = re
 
 @torch.no_grad()
 def eval_arm(arm, dev):
-    lm, nf, tag = ARMS[arm]
+    lm, nf, tag, use_lat = ARMS[arm]
     os.environ["CDWM_GATEB_LATENT"] = lm
     te = GateBDS("test")                                      # src=coacd from env; latent_mode from lm (13 vs 17 pts)
     st = {k: torch.tensor(v, device=dev) for k, v in te.stats.items()}
-    model = (GateBPoint() if arm == "point" else GateBDiT(n_feat=nf, use_latent=False)).to(dev)
+    model = (GateBPoint() if arm == "point" else GateBDiT(n_feat=nf, use_latent=use_lat)).to(dev)
     model.load_state_dict(torch.load(f"gateb_runs/{tag}/best.pt", map_location=dev)); model.eval()
     acp = cosine_acp(1000, device=dev)
     nll, top1, brier, ptop, cover = [], [], [], [], []
@@ -47,7 +49,7 @@ def eval_arm(arm, dev):
             pred = model.predict(pts, br, cl, tb)
             dR = sixd_to_R((pred * st["std"] + st["mean"])[:, :6]).cpu().numpy()[:, None]
         else:
-            cond = model.cond(pts, br, cl, tb, None)          # grounded feeds CoM via per-point pts, not the latent vec
+            cond = model.cond(pts, br, cl, tb, b["latent"].to(dev) if use_lat else None)   # abstract feeds the latent vec
             x0 = ddim_sample(model, cond.repeat_interleave(N_SAMP, 0), 1, acp, steps=25, device=dev).squeeze(1)
             dR = sixd_to_R((x0 * st["std"] + st["mean"])[:, :6]).cpu().numpy().reshape(B, N_SAMP, 3, 3)
         for i in range(B):
@@ -81,7 +83,7 @@ def obj_bootstrap(gain, obj, nb=3000, seed=0):
 
 def main():
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    res = {a: eval_arm(a, dev) for a in ARMS}
+    res = {a: eval_arm(a, dev) for a in ARMS if os.path.exists(f"gateb_runs/{ARMS[a][2]}/best.pt")}
     obj = res["point"]["obj"]; hi_b = res["point"]["boundary"] > np.median(res["point"]["boundary"])
     out = {}
     for a, m in res.items():
@@ -104,9 +106,16 @@ def main():
     print(f"[CoACD e2e] grounded>no_latent (CoM causal) NLL gain {gc['mean']:+.3f} [{gc['lo']:+.3f},{gc['hi']:+.3f}] "
           f"({gc['n_pos']}/{gc['n_obj']} obj) SIG={gc['lo'] > 0}")
     out["_claims"] = {"dist_gt_point": dp, "grounded_gt_nolatent": gc}
+    # SPECIFICITY (if the arms are trained): grounded should beat abstract (transfers) AND shuffled (correct-CoM control)
+    for ctrl in ("abstract", "shuffled"):
+        if ctrl in res:
+            gg = obj_bootstrap(res[ctrl]["nll"] - res["grounded"]["nll"], obj)
+            print(f"[CoACD e2e] grounded>{ctrl} NLL gain {gg['mean']:+.3f} [{gg['lo']:+.3f},{gg['hi']:+.3f}] "
+                  f"({gg['n_pos']}/{gg['n_obj']} obj) SIG={gg['lo'] > 0}")
+            out["_claims"][f"grounded_gt_{ctrl}"] = gg
     json.dump(out, open("gateb_runs/eval_coacd.json", "w"), indent=1)
     np.savez("gateb_runs/eval_coacd_pred.npz", obj=obj, boundary=hi_b,
-             **{f"{a}_nll": res[a]["nll"] for a in ARMS}, **{f"{a}_top1": res[a]["top1"] for a in ARMS})
+             **{f"{a}_nll": res[a]["nll"] for a in res}, **{f"{a}_top1": res[a]["top1"] for a in res})
     print("\nwrote gateb_runs/eval_coacd.json + eval_coacd_pred.npz")
 
 
