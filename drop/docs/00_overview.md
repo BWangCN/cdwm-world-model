@@ -93,7 +93,13 @@ Rendered from the point-cloud hull via `drop.render_drop_demo`; per-object basin
 
 Basin indices are the object's stable resting poses ranked by probability (see `../figures/*_basins.png`).
 
-## Data
+## Data — two object universes
+The project spans **two distinct object sets**, and it matters which each result uses:
+
+- **Corpus task (`BWangCN/cdwm-drop-corpus`, the colleague's data): 80 unique objects** (108 object×config combinations; 153,996 settled episodes). **Uniform density → CoM at the geometric centroid** (no CoM diversity), **natural releases** (a stable pose + small tilt), so it is shape-dominated (objects mostly settle back). Used by the baseline endpoint WM, the trajectory-supervision arm, and the corpus diffusion rollout.
+- **Gate B (our generation): 90 objects, 88 used** (the 2 `hammer` variants are excluded for a hull/cloud geometry mismatch), object-disjoint split 52/17/19. **CoM-sensitive objects drawn from the ~171-object grasp / WM#1 universe** — Gate B started as a 10-object pilot and was scaled up. Each episode adds the two ingredients the corpus lacks: a **near-boundary release** (tilted 15–55° toward a boundary between stable poses) and a **per-episode hidden CoM** (a controlled explicit-inertial offset along a principal axis). Used by Gate B, cross-object transfer, CoACD end-to-end, and CoM-from-observation.
+- The two sets are **largely disjoint — only 17 objects overlap** (73 are Gate-B-only, 63 corpus-only). "Gate B" is a milestone name from our staged plan (Gate A: is CoM diversity worth building? → A.5: stress tests → **B: the CoM-aware distributional WM**), not an object subset of the corpus.
+
 The near-boundary hidden-CoM episodes live under `drop/gateb/*_gateb_s0.npz` (compact: release quaternion, drop height, hidden CoM `[axis, delta]`, resting quaternion, basin). This 13 MB summary **deterministically regenerates the full trajectories** from `com_sim` (the quantized CoM the simulator used) given the point clouds and MuJoCo 2.3.7; `drop/gateb/verify_gateb.py` confirms a 100% basin match. See `drop/gateb/README.md`.
 
 ## Scope and limitation
