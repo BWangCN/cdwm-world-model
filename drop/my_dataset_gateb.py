@@ -16,17 +16,23 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GATEB = os.path.join(HERE, "gateb")
 _STATS = os.path.join(GATEB, "gateb_target_stats.npz")
 _FEAT_STATS = os.path.join(DERIVED, "drop_feat_stats_release.npz")   # reuse the drop release-frame cloud stats
+COACD_CLOUDS = os.path.join(HERE, "gateb_coacd_clouds")             # Item 1: real-mesh surface clouds (CoACD e2e)
+_COACD_FEAT_STATS = os.path.join(GATEB, "coacd_feat_stats.npz")
 
 
-def _load_all():
+def _load_all(src="hull"):
+    pat = "*_coacd_s0.npz" if src == "coacd" else "*_gateb_s0.npz"
     OBJ, RELQ, DH, COM, RESTQ, BAS = [], [], [], [], [], []
-    for f in sorted(glob.glob(f"{GATEB}/*_gateb_s0.npz")):
+    frames = {}
+    for f in sorted(glob.glob(f"{GATEB}/{pat}")):
         if "hammer" in os.path.basename(f): continue          # elpis-hull geometry, excluded
         z = np.load(f, allow_pickle=True); o = str(z["object"]); n = len(z["release_quat"])
         OBJ += [o] * n; RELQ.append(z["release_quat"]); DH.append(z["drop_h"])
         COM.append(z["com"].astype(np.float32)); RESTQ.append(z["rest_quat"]); BAS.append(z["basin"])
+        if src == "coacd":                                    # self-consistent CoM frame (mesh-derived, stored at gen)
+            frames[o] = (z["hull_center"].astype(np.float32), z["hull_axes"].astype(np.float32))
     return (np.array(OBJ), np.concatenate(RELQ), np.concatenate(DH),
-            np.concatenate(COM), np.concatenate(RESTQ), np.concatenate(BAS))
+            np.concatenate(COM), np.concatenate(RESTQ), np.concatenate(BAS), frames)
 
 
 def object_split(objs, seed=0):                               # object-disjoint 6/2/2 of the 10
@@ -55,7 +61,8 @@ def _mask_for(OBJ, RELQ, split):
 
 class GateBDS(Dataset):
     def __init__(self, split, n_points=4096, stats=None, seed=0):
-        OBJ, RELQ, DH, COM, RESTQ, BAS = _load_all()
+        self.src = os.environ.get("CDWM_GATEB_SRC", "hull")   # hull (default) | coacd (Item 1, real-mesh e2e)
+        OBJ, RELQ, DH, COM, RESTQ, BAS, self.hull_frames = _load_all(self.src)
         m = _mask_for(OBJ, RELQ, split)
         self.obj = OBJ[m]; self.dh = DH[m].astype(np.float32); self.com = COM[m]; self.basin = BAS[m]
         Rrel = quat_to_R(RELQ[m].astype(np.float64)); Rrest = quat_to_R(RESTQ[m].astype(np.float64))
@@ -71,17 +78,39 @@ class GateBDS(Dataset):
         self.latent = np.concatenate([(dl * 20.0)[:, None], oh], 1).astype(np.float32)       # (N,4)
         self.n = n_points; self.clc = {}; self.rng = np.random.default_rng(seed); self.fixed = (split != "train")
         self.stats = stats if stats is not None else self._compute_stats()
-        _fs = np.load(_FEAT_STATS); self.fmean, self.fstd = _fs["mean"], _fs["std"]
+        if self.src == "coacd":
+            self.fmean, self.fstd = self._coacd_feat_stats()  # real-mesh clouds have their own feature distribution
+        else:
+            _fs = np.load(_FEAT_STATS); self.fmean, self.fstd = _fs["mean"], _fs["std"]
         # cross-object transfer study: how the hidden CoM is fed. none|abstract (base_rel) | grounded|shuffled (per-point)
         self.latent_mode = os.environ.get("CDWM_GATEB_LATENT", "abstract")
         self._hc = {}                                          # per-object hull (center, principal axes) to locate the CoM
         self.com_shuf = self.com[np.random.default_rng(1).permutation(len(self.com))]   # wrong-CoM control (shuffled)
 
     def _cl(self, o):
-        if o not in self.clc: self.clc[o] = _raw_cloud(o)
+        if o not in self.clc:
+            self.clc[o] = self._mesh_cloud(o) if self.src == "coacd" else _raw_cloud(o)
         return self.clc[o]
 
+    def _mesh_cloud(self, o):                                 # CoACD e2e: real-mesh surface cloud (isotropic Sig)
+        z = np.load(f"{COACD_CLOUDS}/{o}.npz"); mu = z["mu"].astype(np.float32); N = len(mu)
+        Sig = (np.eye(3, dtype=np.float32) * float(z["sig2"]))[None].repeat(N, 0)
+        return dict(mu=mu, Sig_obj=Sig, opacity=np.ones((N, 1), np.float32), ic=np.ones((N, 1), np.float32))
+
+    def _coacd_feat_stats(self):                              # standardize on the real-mesh cloud feature distribution
+        if os.path.exists(_COACD_FEAT_STATS):
+            d = np.load(_COACD_FEAT_STATS); return d["mean"], d["std"]
+        rng = np.random.default_rng(0); sel = rng.choice(len(self.obj), min(1500, len(self.obj)), replace=False)
+        F = []
+        for j in sel:
+            rc = self._cl(self.obj[j]); idx = rng.choice(len(rc["mu"]), self.n, replace=len(rc["mu"]) < self.n)
+            f, _ = build_feats_drop(rc["mu"][idx], rc["Sig_obj"][idx], rc["opacity"][idx], rc["ic"][idx], self.R_rel[j], "release")
+            F.append(f)
+        F = np.concatenate(F); mean = F.mean(0).astype(np.float32); std = (F.std(0) + 1e-4).astype(np.float32)
+        np.savez(_COACD_FEAT_STATS, mean=mean, std=std); return mean, std
+
     def _hull(self, o):                                        # match generate_obj/drop_sweep.hull (subsample seed 0)
+        if self.src == "coacd": return self.hull_frames[o]     # (hc, axes) the CoM was placed along (mesh frame, stored)
         if o in self._hc: return self._hc[o]
         from scipy.spatial import ConvexHull
         mu = np.load(f"{PCDIR}/{o}.npz")["mu"].astype(np.float64)
@@ -90,7 +119,8 @@ class GateBDS(Dataset):
         self._hc[o] = (hc.astype(np.float32), vt.astype(np.float32)); return self._hc[o]
 
     def _compute_stats(self):
-        _s = os.path.join(GATEB, f"gateb_target_stats_{SPLIT_MODE}.npz")
+        tag = f"{self.src}_{SPLIT_MODE}" if self.src == "coacd" else SPLIT_MODE
+        _s = os.path.join(GATEB, f"gateb_target_stats_{tag}.npz")
         if os.path.exists(_s): d = np.load(_s); return {"mean": d["mean"], "std": d["std"]}
         sel = self.rng.choice(len(self.target), min(4000, len(self.target)), replace=False)
         T = self.target[sel]; st = {"mean": T.mean(0).astype(np.float32), "std": (T.std(0) + 1e-4).astype(np.float32)}

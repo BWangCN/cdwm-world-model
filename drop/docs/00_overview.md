@@ -57,7 +57,22 @@ Does knowing the CoM help on an object never seen in training (object-disjoint s
 - grounded > no-latent **+0.184**, grounded > abstract **+0.191**, grounded > shuffled-CoM **+0.160** (all significant, paired object-bootstrap CIs).
 - broad (grounded beats the baselines on **18/19** objects) and well calibrated (grounded ECE 0.019). The shuffled-CoM control rules out extra-channel capacity.
 
-Four arms: `no_latent` | `abstract_oracle` | `grounded_oracle` | `shuffled_oracle`. The latent is the oracle CoM supplied at test; estimating the CoM from observations is future work.
+Four arms: `no_latent` | `abstract_oracle` | `grounded_oracle` | `shuffled_oracle`. The latent is the oracle CoM supplied at test.
+
+## Inferring the CoM from observations — test-time instance adaptation (`drop.com_infer`)
+The transfer arms are handed the true CoM. Here we **drop the oracle**: can the model *infer* the hidden CoM from a few observed drops of the same object instance, and predict the next drop better? An object instance has a fixed (but hidden) mass distribution; each drop's resting basin is evidence about it. Using the **frozen grounded WM as a likelihood** `P(basin | CoM, release)`, we do analytic Bayesian updating over a CoM grid: `p(CoM | k observed drops) ∝ ∏ P(basin_i | CoM, release_i)`, then predict a held-out drop by marginalizing the WM over the posterior. No new training, no new data — the 843 fixed-CoM instances are existing Gate B episodes grouped by their (3 mm-quantized) CoM. Evaluated on the **19 object-disjoint held-out objects** (transductive test-time adaptation, not zero-shot).
+
+Predictive NLL of held-out query drops falls monotonically as more drops are observed:
+
+| observed drops k | 0 | 1 | 2 | 4 | 8 |
+|---|---|---|---|---|---|
+| predictive NLL | 0.678 | 0.651 | 0.630 | 0.598 | **0.566** |
+
+- **Paired per-object adaptation gain k=0→k=8: +0.111 NLL [+0.045, +0.212], significant, 17/19 objects.** (no-latent marginal = 0.744.)
+- The posterior **concentrates** with evidence: entropy 3.39→2.82, and posterior mass on the true-CoM cell rises 0.03→0.05 (uniform = 1/33).
+- **Marginalizing beats plugging in a single CoM**: the posterior-marginal predictive beats the MAP-CoM plug-in at every k (k=8: 0.566 vs 0.600) and stays better-calibrated (ECE 0.043 vs 0.065). Both even edge out the *true-CoM point estimate* (0.639) — under an imperfect WM, inferring the model's *effective* CoM and marginalizing is better than committing to the physical CoM. No support/query release-duplicate leakage (0/600 excluded at <5°).
+
+An amortized encoder `q(CoM|obs)` (for fast/scalable inference) is a natural systems extension; the analytic posterior above is the information-theoretic reference and needs no training.
 
 ## Physical-density realism (`drop.multi_physical_density`)
 Validation that the controlled explicit-inertial offset is a faithful proxy for real mass distribution, not a synthetic artifact. Across 6 CoACD-decomposed real-mesh objects, a randomized heavy-end per-hull **physical density** causally controls the basin in every object (paired near-boundary drops), reproducing the hammer result (I(basin;density) 0.161 vs the controlled-offset 0.165). Effect size tracks shape and is reported as a heuristic-sampled lower bound.
@@ -93,10 +108,23 @@ This limitation is scoped to the **Gate B extension**, not the corpus task: the 
 
 **Does the Gate B mechanism survive this?** Yes, on the subset we can check. Re-stratifying the core Gate B result (distribution beats point, hidden CoM is causal; known-object reldisjoint split) by the boundary-regime geometry gap instead of the global proxy: dist>point gain is positive and stable across low/mid/high-gap thirds (**+0.473 / +0.520 / +0.425**), and the CoM-causality gain (oracle beats no-latent) is if anything **largest in the high-gap third** (+0.033 vs +0.023 low-gap); the per-object correlation between geometry gap and dist>point gain is weak (−0.27). **Coverage caveat:** this stratification covers the **28 of 88** reldisjoint-eval objects (6,758 episodes) that overlap the 29-object local mesh / CoACD audit — it tests whether the mechanism depends on *measured* hull sensitivity within the mesh-observable subset, not the full 88-object eval or the cloud-only remainder, where hull sensitivity cannot currently be measured. Within that subset, the mechanism does not concentrate in, or depend on, the hull-sensitive objects. What the hull approximation costs is the **fidelity of the predicted resting pose for a geometry-sensitive minority**, not the qualitative claim that a hidden latent drives multimodal outcomes.
 
-**Limitation, stated precisely.** For a meaningful share of objects — not only the visibly concave ones — the single convex hull is not a faithful stand-in for the object's true near-boundary contact dynamics; roughly 1 in 5–6 boundary episodes would rest differently under faithful geometry. This is a genuine scope limitation on the *predicted resting pose*, not on the *distribution-over-point / hidden-latent-causality* claims, which hold under the more faithful geometry. The natural fix is convex decomposition (CoACD) integrated end-to-end — the world model's input cloud **re-sampled from the same decomposed geometry** used by the simulator — which remains future work; the boundary-regime study here is a diagnostic, not yet a fix.
+**Limitation, stated precisely.** For a meaningful share of objects — not only the visibly concave ones — the single convex hull is not a faithful stand-in for the object's true near-boundary contact dynamics; roughly 1 in 5–6 boundary episodes would rest differently under faithful geometry. This is a genuine scope limitation on the *predicted resting pose*, not on the *distribution-over-point / hidden-latent-causality* claims, which hold under the more faithful geometry. The natural fix is convex decomposition (CoACD) integrated end-to-end — the world model's input cloud **re-sampled from the same decomposed geometry** used by the simulator. We ran exactly that (see "Does the mechanism survive on faithful geometry?" below): the core claims hold, so the limitation is on predicted-pose *fidelity* for a geometry-sensitive minority, not on the mechanism.
 
 ![scope boundary: the bull rests differently on its real mesh versus its convex hull](../figures/scope_boundary.png)
 *The convex hull collapses the bull's 8 stable resting modes to 3 — an extreme, easily visible case of the geometry effect measured above. The simulator and world model reason about the hull (right), a legless blob; the detailed mesh (left) is the object we recognize but never enters the model.*
+
+### Does the mechanism survive on faithful geometry? Yes (`drop.generate_coacd` / `drop.eval_coacd`)
+We closed the loop the limitation above calls for: regenerate Gate B on the **CoACD convex-decomposition** of the real mesh (more faithful multi-hull collision) **and** feed the world model a cloud **re-sampled from the same real-mesh surface** — so simulator and WM input are geometry-consistent end to end. Retrained the arms object-disjoint on the 29 mesh objects (28 after excluding the hammer set; basins from real-mesh stable poses; object-bootstrap over the 7 test objects).
+
+| arm | NLL | top-1 | ECE |
+|---|---|---|---|
+| point | 1.447 | 0.56 | 0.166 |
+| no_latent (distribution) | 1.056 | 0.63 | 0.045 |
+| grounded (hidden CoM) | **0.822** | **0.71** | 0.050 |
+
+- **distribution > point: +0.357 NLL [+0.195, +0.539], significant, 7/7 objects.**
+- **grounded > no_latent (hidden CoM is causal): +0.242 NLL [+0.179, +0.291], significant, 7/7 objects.**
+- Both core claims hold under faithful geometry, so they are **not artifacts of the single-hull approximation**. The CoM-causality gain is in fact **larger** here than on the single hull (+0.242 vs +0.184): faithful multi-hull geometry has more stable resting modes, so the hidden CoM decides the basin more often. (Absolute NLLs are higher than the hull task because the basin space is larger — hull-vs-CoACD numbers are not directly comparable; the *gains* are the claim.)
 
 ## Model-imagined rollout — Gate B hidden-CoM regime (extension)
 > Distinct from the corpus diffusion rollout above: that one imagines the settle on the **natural corpus** (flat rests, no hidden CoM); this one is the **Gate B near-boundary regime** — per-episode hidden CoM, point-cloud-hull physics — so its diverging basins come from a *shifted hidden CoM* rather than shape+release alone, and resting poses can sit off-flat by construction.
@@ -120,6 +148,13 @@ python -m drop.eval_transfer_hardening                                     # per
 python -m drop.concavity_audit                                             # global convex-hull scope audit (two proxies)
 python -m drop.hull_vs_coacd --obj <object> --n 250 --out <out.json>       # boundary-regime hull-vs-CoACD gap (per object)
 python -m drop.aggregate_hvc                                               # aggregate the 29-object hull_vs_coacd runs
+# CoACD END-TO-END geometry (does the mechanism survive faithful geometry? — Item 1):
+python -m drop.gateb.generate_coacd --obj <object> --n 2500                # CoACD-physics Gate B episodes (29 mesh objects)
+python -m drop.build_mesh_cloud --all                                      # real-mesh surface clouds (geometry-consistent WM input)
+CDWM_GATEB_SRC=coacd python -m drop.train_gateb --arm grounded_oracle --tag coacd_grounded
+CDWM_GATEB_SRC=coacd python -m drop.eval_coacd                             # dist>point + grounded>no_latent, object-bootstrap
+# CoM FROM OBSERVATIONS — test-time instance adaptation (Item 2), uses frozen grounded_oracle + no_latent:
+CDWM_GATEB_LATENT=grounded python -m drop.com_infer                        # Bayesian CoM posterior; predictive NLL vs k
 MUJOCO_GL=egl python -m drop.render_drop_demo                              # regenerate the demo videos
 # rollout WM (imagine the settle; K=16 trajectory targets regenerate from com_sim, ~75 MB, not shipped):
 python -m drop.gen_rollout   --obj <object>                                # settling-trajectory targets -> gateb/<obj>_roll_s0.npz
