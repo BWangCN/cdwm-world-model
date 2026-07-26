@@ -1,5 +1,7 @@
 # Drop-Phase World Model
 
+> 中文版见 [`01_overview_zh.md`](01_overview_zh.md)（含设计示意图、88 物体清单、相比 HF v1 数据集的改动）.
+
 The task, per the corpus formulation (`BWangCN/cdwm-drop-corpus`): a world model of **where an object comes to rest after being released above a table** — object released → free-fall → impact → settle. The corpus records the full trajectory (world-frame pose at 31.25 Hz); the **learned target is the terminal resting pose** (its resting SE(3), and which stable **basin** it settles into), predicted from the object point cloud (the same Gaussian-cluster assets as the grasp WM) plus the release parameters — the fall itself is near-deterministic ballistics, so the modeling weight goes where the physics is interesting: the settle outcome. The drop regime completes the CDWM story: the natural corpus is largely a deterministic geometric mapping (a point predictor suffices), while near a stability boundary a hidden center-of-mass makes the outcome multimodal and a distributional world model becomes necessary.
 
 Three regimes appear below — keep them distinct:
