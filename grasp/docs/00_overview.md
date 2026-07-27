@@ -9,7 +9,13 @@ Code → GitHub; model weights / `*.npz` artifacts → HuggingFace; dataset alre
 
 ## Theme notes
 - [01 — Object interactions under gripper contraction (rigid tilt)](01_rigid_gripper_contraction.md)
-- [02 — Contact-dynamics world model (slip/drop/hold): MDN main result + coupling validations](02_slip_contact_dynamics_wm.md)
+- [02 — Contact-dynamics world model (slip/drop/hold): DiT rollout (featured) + coupling validations](02_slip_contact_dynamics_wm.md)
+
+> **Canonical head = DiT diffusion.** Across every regime the featured world model is the **DiT diffusion rollout** (the
+> colleague's design; grasp `local_geo` **3.46°**, slip/drop rollout wins as a distribution). The MDN summary-space head in
+> [02](02_slip_contact_dynamics_wm.md) is an **exploratory alternative** (predicts a 15-d motion *summary*, not the raw
+> per-step trajectory the diffusion WM denoises); it is retained for the record but **de-emphasized** and not part of the
+> shipped workflow. See `notes/alignment_diffusion.md`.
 
 Each theme note is self-contained: **design → experiments & results (with CIs) → figures → model & data**.
 
@@ -29,7 +35,9 @@ Each theme note is self-contained: **design → experiments & results (with CIs)
 - File: `wm/dit_local.py` (`DiTWMLocal.encode`). Output = 256-d conditioning embedding.
 - Pieces: **gripper-frame cloud** (point features expressed in the contact frame) + per-gaussian **covariance**
   (Σ = R·diag(s²)·Rᵀ) + **contact-weighted pool** (soft-weight by distance to the pinch line).
-- Design principle: same encoder across regimes; only the **output head** changes by task (DiT diffusion / classifier / MDN).
+- Design principle: same encoder across regimes; only the **output head** changes by task. **The canonical head is the
+  DiT diffusion rollout** (grasp + slip/drop); the classifier is an auxiliary risk head and the MDN is an exploratory,
+  de-emphasized summary-space alternative.
 
 ## Honest-evaluation protocol (applied throughout)
 - **Object-disjoint** split (family-merged, near-dup-guarded): `make_outcome_split.py`.
