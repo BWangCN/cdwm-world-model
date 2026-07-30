@@ -66,13 +66,15 @@ _band = (np.abs(_Vr @ _ap) < 0.03) & (np.abs(_Vr @ _x) < 0.02)
 GRIP_HALF = float(np.abs((_Vr @ _y)[_band]).max()) if int(_band.sum()) > 8 else float(min(u.obj_half[0], u.obj_half[1]))
 print(f"grasp {GRASP_ID}: approach {_av[GRASP_ID]:.1f}deg from vert | grip_half {GRIP_HALF*1000:.0f}mm | tcp {np.round(_tcp_w,3)}", flush=True)
 
+# place far enough that the placed object's footprint does NOT overlap the original (scale by the object radius).
+PLACE_DX = 0.24 + float(max(u.obj_half[0], u.obj_half[1]))
 def _wp(p): return sapien.Pose(p=np.asarray(p, float), q=GRASP_Q)
 waypts = {
     "pre":     _wp(_ee0 - 0.18 * _ap),                        # back off along -approach
     "grasp":   _wp(_ee0),
     "lift":    _wp(_ee0 + [0, 0, 0.20]),
-    "carry":   _wp(_ee0 + [0.28, 0, 0.20]),
-    "release": _wp(_ee0 + [0.28, 0, 0.06]),
+    "carry":   _wp(_ee0 + [PLACE_DX, 0, 0.20]),
+    "release": _wp(_ee0 + [PLACE_DX, 0, 0.06]),
 }
 
 # pinocchio IK is in the robot ROOT frame; the FR3 base is at [-0.5,0,0] world -> convert world targets to base frame
@@ -283,17 +285,26 @@ for g in np.linspace(GRIP_CLOSE, GRIP_OPEN, 4): set_state(q["release"], g, None,
 # accelerating fall (z(s) = z_rel - (z_rel-z_final)*s^2, s=time), NOT the WM's evenly-spaced settle frames played
 # slowly. Compress to N_DROP frames (short real fall ~0.1s) + a couple of rest frames so the placed pose reads.
 rq = np.asarray(rel_pose.q); z_rel = float(rel_pose.p[2]); xy = rel_pose.p[:2]
-# a PLACE returns the object to a STABLE rest = the pose it was placed in (identity), so it settles flat/upright
-# (fixes the hammer landing tilted head-down and the clip ending before the tail settles). Fall under gravity,
-# un-tilting rq -> identity, then hold at the flat rest for a few frames.
-q_final = np.array([1.0, 0, 0, 0]); z_final = rest_z(q_final) + PEDESTAL_H   # settle back onto the pedestal/table
-N_DROP = 5
-for i in range(N_DROP):
-    s = i / (N_DROP - 1)
-    qf = quat_norm((1 - s) * rq + s * q_final)                        # nlerp release-tilt -> stable rest
-    z = max(z_rel - (z_rel - z_final) * (s * s), rest_z(qf))           # gravity: starts slow, accelerates
+q_rest = np.array([1.0, 0, 0, 0])                                     # stable rest = the pose it was placed in
+def _slerp(a, b, s):
+    a = quat_norm(a); b = quat_norm(b); d = float(np.dot(a, b))
+    if d < 0: b = -b; d = -d
+    if d > 0.9995: return quat_norm(a + s * (b - a))
+    th = np.arccos(d); return (np.sin((1 - s) * th) * a + np.sin(s * th) * b) / np.sin(th)
+# PHYSICAL two-phase settle (imagination runs until the object is FULLY at rest):
+# (1) free-FALL in the release orientation under gravity, so the heavier/lower end contacts the table FIRST;
+# (2) TOPPLE — the object pivots on the contacting edge, rotating to its stable rest (the raised side falls down),
+#     z tracking the resting height. The stopping condition is reaching the stable rest (not a fixed frame count).
+z_contact = rest_z(rq) + PEDESTAL_H
+for i in range(1, 5):                                                # phase 1: free fall (gravity accel)
+    s = i / 4; z = z_rel - (z_rel - z_contact) * (s * s)
+    set_state(q["release"], GRIP_OPEN, sapien.Pose(p=[xy[0], xy[1], z], q=rq), "place_settle", False)
+NT = 9
+for i in range(1, NT + 1):                                           # phase 2: topple to the stable rest
+    s = i / NT; qf = quat_norm(_slerp(rq, q_rest, s)); z = rest_z(qf) + PEDESTAL_H
     set_state(q["release"], GRIP_OPEN, sapien.Pose(p=[xy[0], xy[1], z], q=qf), "place_settle", False)
-for _ in range(3): set_state(q["release"], GRIP_OPEN, sapien.Pose(p=[xy[0], xy[1], z_final], q=q_final), "place_settle", False)
+z_final = rest_z(q_rest) + PEDESTAL_H
+for _ in range(2): set_state(q["release"], GRIP_OPEN, sapien.Pose(p=[xy[0], xy[1], z_final], q=q_rest), "place_settle", False)
 
 def obj_pq():
     p = obj.pose

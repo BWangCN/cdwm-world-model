@@ -102,7 +102,7 @@ try:
         sep = float(np.linalg.norm(cal.xpos[pads[0]] - cal.xpos[pads[1]]) / 2)
         q8 = cal.qpos[gadr].copy()
         if sep > widest[0]: widest = (sep, q8)               # most-open pose
-        if sep >= jaw_half + 0.004 and sep - (jaw_half + 0.004) < best[0]: best = (sep - (jaw_half + 0.004), q8)
+        if sep >= jaw_half + 0.009 and sep - (jaw_half + 0.009) < best[0]: best = (sep - (jaw_half + 0.009), q8)   # ~1cm clearance -> pads stay outside the object surface
     closed_q = best[1]; open_q = widest[1]
     HAVE_GRIP = True
     print(f"gripper calib: jaw_half={jaw_half:.3f}m -> closed pose set (open={np.round(open_q,2)})", flush=True)
