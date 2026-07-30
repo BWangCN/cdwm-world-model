@@ -49,16 +49,19 @@ GRASP_ID = int(_cand[np.argmin(_g["net_tilt_deg"][_cand])])
 _half_z = float(u.obj_half[2])
 # grasp_point/approach/closing/base_pos are in the GRASP FRAME (object base on the table at z=0). We place the
 # object base on the table, so the grasp frame == world and the TCP is grasp_point directly (no AABB offset).
-_tcp_w = _g["grasp_point"][GRASP_ID].astype(float).copy()
+_tcp0 = _g["grasp_point"][GRASP_ID].astype(float).copy()       # grasp frame: object base on table at z=0
 _ap = _g["approach"][GRASP_ID] / (np.linalg.norm(_g["approach"][GRASP_ID]) + 1e-9)   # into object = ee local +z
 _cl = _g["closing"][GRASP_ID]
 _y = _cl - (_cl @ _ap) * _ap; _y /= (np.linalg.norm(_y) + 1e-9); _x = np.cross(_y, _ap)   # ee axes (world; object=I)
 GRASP_R = np.stack([_x, _y, _ap], axis=1); GRASP_Q = _R2q(GRASP_R)
+# SIDE grasps (approach far from vertical, e.g. a flat plate's rim) need the object lifted on a support so the
+# gripper can reach around the rim without the table blocking it. Top-down grasps (bottles, hammer handle) untouched.
+PEDESTAL_H = 0.07 if float(_av[GRASP_ID]) > 45.0 else 0.0
+_tcp_w = _tcp0 + np.array([0.0, 0.0, PEDESTAL_H])
 _ee0 = _tcp_w - TCP_OFFSET * _ap                              # ee(2f85_base) sits behind the TCP along -approach
-# grip half-width = object half-extent along the closing axis in a band around the grasp point. Convert the mesh
-# vertices (mesh frame) INTO the grasp frame: mesh AABB center -> [0,0,half_z] (grasp-frame AABB center).
+# grip half-width = object half-extent along the closing axis in a band around the grasp point (grasp frame, unshifted).
 _gv = _tm.vertices - _cen + np.array([0.0, 0.0, _half_z])
-_Vr = _gv - _tcp_w
+_Vr = _gv - _tcp0
 _band = (np.abs(_Vr @ _ap) < 0.03) & (np.abs(_Vr @ _x) < 0.02)
 GRIP_HALF = float(np.abs((_Vr @ _y)[_band]).max()) if int(_band.sum()) > 8 else float(min(u.obj_half[0], u.obj_half[1]))
 print(f"grasp {GRASP_ID}: approach {_av[GRASP_ID]:.1f}deg from vert | grip_half {GRIP_HALF*1000:.0f}mm | tcp {np.round(_tcp_w,3)}", flush=True)
@@ -87,15 +90,18 @@ def _solve(target, q0):
     return r, inlim
 
 def ik(target_world, q0, n_seeds=12):
-    """limit-aware multi-seed IK: prefer the continuity seed, else search seeds for an in-JOINT-LIMIT solution
-    (the FR3 is 7-DOF redundant; the transport/release reach can push a single-seed branch past a limit)."""
+    """limit-aware multi-seed IK that keeps CONTINUITY: gather all in-joint-limit solutions (continuity seed +
+    random seeds) and return the one CLOSEST to q0 in joint space. Returning the first random in-limits branch
+    made the arm swing wildly between waypoints (bleach); the nearest branch keeps the motion smooth."""
     target = base_inv * target_world
+    cands = []
     r, inlim = _solve(target, q0)
-    if inlim: return r
+    if inlim: cands.append(r)
     for _ in range(n_seeds):
         s = np.concatenate([QMIN + _ikrng.random(7) * (QMAX - QMIN), q0[7:]])
         r2, inlim2 = _solve(target, s)
-        if inlim2: return r2
+        if inlim2: cands.append(r2)
+    if cands: return min(cands, key=lambda c: float(np.linalg.norm(c[:7] - q0[:7])))
     return r
 
 def fk_ee(qpos):
@@ -229,7 +235,7 @@ Hd = len(drop_rel)
 drop_end = np.degrees(_reorient[d_ep])
 print(f"drop WM ep {d_ep} (min-reorient, place regime): settle reorient {drop_end:.1f} deg over Hd={Hd}", flush=True)
 
-obj_ground = sapien.Pose(p=[0.0, 0.0, OBJ_Z])
+obj_ground = sapien.Pose(p=[0.0, 0.0, OBJ_Z + PEDESTAL_H])     # object rests on the support pedestal (if any)
 # warmup: let the table glb texture + materials stream in before capturing (early frames render gray/half-lit otherwise)
 set_state(q["rest"], GRIP_OPEN, obj_ground)
 for _ in range(12): env.render()
@@ -277,11 +283,14 @@ for g in np.linspace(GRIP_CLOSE, GRIP_OPEN, 4): set_state(q["release"], g, None,
 # accelerating fall (z(s) = z_rel - (z_rel-z_final)*s^2, s=time), NOT the WM's evenly-spaced settle frames played
 # slowly. Compress to N_DROP frames (short real fall ~0.1s) + a couple of rest frames so the placed pose reads.
 rq = np.asarray(rel_pose.q); z_rel = float(rel_pose.p[2]); xy = rel_pose.p[:2]
-q_final = quat_norm(quat_mul(drop_rel[-1], rq)); z_final = rest_z(q_final)
+# a PLACE returns the object to a STABLE rest = the pose it was placed in (identity), so it settles flat/upright
+# (fixes the hammer landing tilted head-down and the clip ending before the tail settles). Fall under gravity,
+# un-tilting rq -> identity, then hold at the flat rest for a few frames.
+q_final = np.array([1.0, 0, 0, 0]); z_final = rest_z(q_final) + PEDESTAL_H   # settle back onto the pedestal/table
 N_DROP = 5
 for i in range(N_DROP):
     s = i / (N_DROP - 1)
-    qf = quat_norm(quat_mul(drop_rel[int(round(s * (Hd - 1)))], rq))   # resample the WM settle onto the fall
+    qf = quat_norm((1 - s) * rq + s * q_final)                        # nlerp release-tilt -> stable rest
     z = max(z_rel - (z_rel - z_final) * (s * s), rest_z(qf))           # gravity: starts slow, accelerates
     set_state(q["release"], GRIP_OPEN, sapien.Pose(p=[xy[0], xy[1], z], q=qf), "place_settle", False)
 for _ in range(3): set_state(q["release"], GRIP_OPEN, sapien.Pose(p=[xy[0], xy[1], z_final], q=q_final), "place_settle", False)
@@ -332,6 +341,6 @@ np.savez(f"figures/vla_trajectory_{TAG}.npz", rgb=rgb,
          obj_half=OBJ_HALF_ARR, P_ee=np.asarray(P_ee), M=M,
          qlimits=robot.get_qlimits().cpu().numpy().reshape(-1, 2),
          obj_id=OBJ_ID, grasp_id=GRASP_ID, grasp_source="dataset",
-         grasp_net_tilt=float(_g["net_tilt_deg"][GRASP_ID]), grip_half=float(GRIP_HALF),
+         grasp_net_tilt=float(_g["net_tilt_deg"][GRASP_ID]), grip_half=float(GRIP_HALF), pedestal_h=float(PEDESTAL_H),
          joint_names=np.array([j.name for j in robot.active_joints]))   # ManiSkill qpos order -> remap to MuJoCo for render
 print(f"wrote figures/vla_demo_{TAG}.gif ({N} frames) + vla_trajectory_{TAG}.npz ({len(traj_log)} recs)", flush=True)

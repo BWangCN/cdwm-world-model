@@ -22,7 +22,7 @@ wb = spec.worldbody
 # place the FR3 base at the ManiSkill world pose (base at x=-0.5) so the logged world object poses line up
 base = next(b for b in wb.bodies if b.name == "base"); base.pos = [-0.5, 0.0, 0.0]
 # lights
-wb.add_light(pos=[0.4, -0.4, 1.6], dir=[-0.25, 0.25, -1], diffuse=[0.7, 0.7, 0.7], specular=[0.2, 0.2, 0.2])
+wb.add_light(pos=[0.4, -0.4, 1.6], dir=[-0.25, 0.25, -1], diffuse=[0.7, 0.7, 0.7], specular=[0.03, 0.03, 0.03])
 # checker floor material + a wood-toned table top (top surface at z=0)
 tex = spec.add_texture(name="grid", type=mujoco.mjtTexture.mjTEXTURE_2D, builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
                        width=300, height=300, rgb1=[0.28, 0.28, 0.32], rgb2=[0.36, 0.36, 0.4])
@@ -30,6 +30,10 @@ spec.add_material(name="gridmat", textures=["", "grid"], texrepeat=[8, 8], refle
 wb.add_geom(type=mujoco.mjtGeom.mjGEOM_PLANE, size=[3, 3, 0.1], pos=[0, 0, -0.041], material="gridmat")
 tt = wb.add_body(name="table_top", pos=[0, 0, -0.02])
 tt.add_geom(type=mujoco.mjtGeom.mjGEOM_BOX, size=[0.7, 0.55, 0.02], rgba=[0.62, 0.42, 0.24, 1])
+PED_H = float(d["pedestal_h"]) if "pedestal_h" in d.files else 0.0   # support that lifts a low-grasp object (e.g. plate)
+if PED_H > 1e-4:
+    pb = wb.add_body(name="pedestal", pos=[0, 0, PED_H / 2])
+    pb.add_geom(type=mujoco.mjtGeom.mjGEOM_BOX, size=[0.05, 0.05, PED_H / 2], rgba=[0.35, 0.35, 0.38, 1])
 # object: the REAL scanned mesh + texture (not a box proxy). Center the mesh AABB at the mocap origin so it
 # lines up with the WM object pose (which treats the object as centered at the actor origin).
 DSET = "/misc/kcgscratch1/MengyeGroup/yy5259/datasets/cdwm-grasp-dataset"
@@ -47,6 +51,9 @@ if os.path.exists(texf):
     except Exception:
         try: mat.textures = ["objtex"]
         except Exception: mat = None
+    if mat is not None:                                     # matte object: kill blown-out specular highlights
+        try: mat.specular = 0.05; mat.shininess = 0.05; mat.reflectance = 0.0
+        except Exception: pass
     matname = "objmat" if mat is not None else None
 ob = wb.add_body(name="cdwm_obj", mocap=True, pos=[0, 0, half[2]])
 g = ob.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="objmesh", pos=(-cen).tolist())
