@@ -1,5 +1,17 @@
 # CDWM → VLA data-generation pipeline (π0.5) — design doc
 
+> **⚠️ ARCHIVED (2026-07-31) — this direction is NOT being pursued.**
+> Decision by the project lead: Diffusion Policy (DP) has already validated that the CDWM-generated
+> data is usable, and layering a VLA on top amounts to little more than attaching a language-instruction
+> label — not worth the effort ("加个简单的language instruction标签…纯粹是为了赶热点"). Data generation
+> instead proceeds via the colleague's **`gs-native-datagen`** repo
+> (https://github.com/BWangCN/gs-native-datagen): scripted expert + **frozen CD-WM (our GRASP WM,
+> `colorless_s{0,1,2}/frame`)** + **3DGS-native rendering** → **LeRobot** dataset for DP (no language, no π0.5).
+> That repo is the mature realization of the "step-6 3DGS renderer" deferred here; it consumes our grasp WM as
+> its contact/settle engine (drop/place is scripted FK, so the drop WM `roll_corpus` is unused).
+> Everything below is preserved for reference only. The last VLA build is tagged `vla-pipeline-archived`
+> (commit d489641: FR3+2F-85, MuJoCo photoreal replay, feasibility/consistency filters, π0.5 writer, 5-object dry corpus).
+
 **Goal.** Given an object, use the CDWM diffusion world models to *hallucinate* physically-plausible interaction
 outcomes → filter → render photoreal RGB → pair with generated language → **training data for a VLA policy (target:
 π0.5, Physical Intelligence).** Status of this doc: design confirmed by a Codex (gpt-5.5) adversarial review, 2026-07-28
