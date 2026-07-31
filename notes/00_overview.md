@@ -4,17 +4,24 @@ Index + shared pieces for the theme notes. Paths are repo-relative (`cdwm-world-
 Code → GitHub; model weights / `*.npz` artifacts → HuggingFace; dataset already on HF.
 
 > **Note (paths)**: file paths in these notes are current **local** placeholders — they will be swapped for the
-> GitHub / HuggingFace URLs once the repos are populated (last release step). See `notes/RELEASE_MANIFEST.md` for the
+> GitHub / HuggingFace URLs once the repos are populated (last release step). See `RELEASE_MANIFEST.md` for the
 > exact ship-list and the swap rules.
 
 ## Theme notes
 - [01 — Object interactions under gripper contraction (rigid tilt)](01_rigid_gripper_contraction.md)
-- [02 — Contact-dynamics world model (slip/drop/hold): MDN main result + coupling validations](02_slip_contact_dynamics_wm.md)
+- [02 — Contact-dynamics world model (slip/drop/hold): DiT rollout (featured) + coupling validations](02_slip_contact_dynamics_wm.md)
+
+> **Canonical head = DiT diffusion.** Across every regime the featured world model is the **DiT diffusion rollout** (the
+> colleague's design; grasp `local_geo` **3.46°**, slip/drop rollout wins as a distribution). The MDN summary-space head in
+> [02](02_slip_contact_dynamics_wm.md) is an **exploratory alternative** (predicts a 15-d motion *summary*, not the raw
+> per-step trajectory the diffusion WM denoises); it has been **moved off `main`** to the dedicated `exploratory-mdn`
+> branch (its code/weights removed here to declutter). See `alignment_diffusion.md`.
 
 Each theme note is self-contained: **design → experiments & results (with CIs) → figures → model & data**.
 
-> **`docs/` vs `notes/`**: `docs/` is the clean handoff set (these theme notes). `notes/` holds the internal dev logs
-> (`progress_summary_zh`, `slip_phase_plan`, `RELEASE_MANIFEST`, working `RESULTS.md`).
+> **Single `notes/` tree**: these theme notes (the clean handoff set: `00`–`02`) and the internal dev logs
+> (`slip_phase_plan`, `RELEASE_MANIFEST`, working `RESULTS.md`, …) now live together under `notes/` — see `INDEX.md`.
+> The ship branch `restructure-common-grasp-drop` carries the canonical `grasp/docs/` copy of the handoff set.
 
 > **Unifying thread**: both regimes use the *same* DiT diffusion rollout to imagine the object's future motion from the
 > grasp — [01](01_rigid_gripper_contraction.md) rolls out the longer **H=32** gripper-*closing* tilt (one reliable future),
@@ -29,7 +36,9 @@ Each theme note is self-contained: **design → experiments & results (with CIs)
 - File: `wm/dit_local.py` (`DiTWMLocal.encode`). Output = 256-d conditioning embedding.
 - Pieces: **gripper-frame cloud** (point features expressed in the contact frame) + per-gaussian **covariance**
   (Σ = R·diag(s²)·Rᵀ) + **contact-weighted pool** (soft-weight by distance to the pinch line).
-- Design principle: same encoder across regimes; only the **output head** changes by task (DiT diffusion / classifier / MDN).
+- Design principle: same encoder across regimes; only the **output head** changes by task. **The canonical head is the
+  DiT diffusion rollout** (grasp + slip/drop); the classifier is an auxiliary risk head and the MDN is an exploratory,
+  de-emphasized summary-space alternative.
 
 ## Honest-evaluation protocol (applied throughout)
 - **Object-disjoint** split (family-merged, near-dup-guarded): `make_outcome_split.py`.

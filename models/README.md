@@ -39,4 +39,4 @@ models/
 ## Usage
 Every model reuses the shared `local` encoder; load a checkpoint with the matching class from the code repo
 (`wm/dit_local.py`, `wm/classifier.py`, `wm/trajnet.py`, `wm/dit_rollout.py`) and the `norm_stats/` z-scores.
-Architectures, training configs, and full results are in the code docs (`docs/01`, `docs/02`).
+Architectures, training configs, and full results are in the code docs (`notes/01`, `notes/02`).

@@ -3,6 +3,11 @@
 The core slip-scope result: from t=0 geometry, predict a **calibrated distribution over contact outcomes** — plus two
 colleague-suggested coupling designs tested as controls. (Shared pieces → [00_overview.md](00_overview.md).)
 
+> **Featured WM = the DiT diffusion rollout** (§(ii) below + its inline prediction gifs) — the colleague's canonical head,
+> shared with the grasp task ([01](01_rigid_gripper_contraction.md)). The MDN below is an **exploratory summary-space
+> alternative** (a 15-d motion *summary*, mode-agnostic) kept for the record but **de-emphasized**; it is not the shipped
+> model. See `alignment_diffusion.md`.
+
 ## Design (world model)
 - **Data**: `outcomes_v2` — full close→lift→outcome SE(3) trajectories + **5-way outcome labels**
   {RIGID, TRANSIENT_SLIP (success) · PERSISTENT_SLIP, LIFTED_DROPPED, CLOSED_NEVER_LIFTED (failure)}.
@@ -10,9 +15,10 @@ colleague-suggested coupling designs tested as controls. (Shared pieces → [00_
   (post-hoc temperature scaling at eval).
 - **Phase-2 target**: 15-d **object-in-moving-gripper motion summary** (settle 6D+trans, max-drift, slip-rate, drop-time,
   held-frac) — `compute_traj_summaries.py` → `traj_summaries.npz`.
-- **Main model = MDN** (`wm/trajnet.py::MDNTrajNet`): shared encoder → **K=8-component Gaussian mixture** over the 15-d
-  summary; **mixture NLL**; mode-agnostic (no threshold labels) — modes emerge as components. (Baselines in same file:
-  `TrajNet` labeled per-mode experts; `DirectTrajNet` single-mean.)
+- **Exploratory summary head = MDN** (`wm/trajnet.py::MDNTrajNet`, *de-emphasized — see banner*): shared encoder →
+  **K=8-component Gaussian mixture** over the 15-d summary; **mixture NLL**; mode-agnostic (no threshold labels) — modes
+  emerge as components. (Baselines in same file: `TrajNet` labeled per-mode experts; `DirectTrajNet` single-mean.) The
+  **featured** WM is the DiT diffusion rollout in §(ii), which denoises the raw per-step trajectory rather than a summary.
 
 ## Training config
 - Classifier: `train_cls.py` — epochs 80, bs 256, lr 1e-3.
@@ -90,10 +96,14 @@ Paired per-object deltas (same episodes); every claim, incl. the honest negative
 - [transient-slip — Marc Anthony conditioner bottle tilts (19°)](../figures/rollout_slip.mp4)
 - [lifted-dropped — Krill Oil bottle rises out of the gripper (95°)](../figures/rollout_drop.mp4)
 
-**Predicted vs ground truth** — the trained rollout WM's own predictions (`render_pred.py`; gripper frame, K=10 window): GT object = blue oriented box + cloud, the model's N=8 samples = orange boxes. The predicted **spread grows with outcome uncertainty** — visualizing the *calibrated distribution over near-term futures*:
-- [rigid — samples cluster tight on the GT (confident hold)](../figures/rollout_pred_rigid.mp4)
-- [transient-slip — moderate spread](../figures/rollout_pred_slip.mp4)
-- [lifted-dropped — wide spread (uncertain, multimodal)](../figures/rollout_pred_drop.mp4)
+**Predicted vs ground truth** — the trained DiT-rollout WM's own predictions (`render_pred.py`; gripper frame, K=10 window): GT object = blue oriented box + cloud, the model's N=8 samples = orange boxes. The predicted **spread grows with outcome uncertainty** — visualizing the *calibrated distribution over near-term futures* (mp4 links are higher-res):
+
+| rigid (confident hold) | transient-slip (moderate) | lifted-dropped (multimodal) |
+|:---:|:---:|:---:|
+| ![rigid — samples cluster tight on the GT](../figures/rollout_pred_rigid.gif) | ![transient-slip — moderate spread](../figures/rollout_pred_slip.gif) | ![lifted-dropped — wide, multimodal spread](../figures/rollout_pred_drop.gif) |
+| samples cluster **tight** on GT | **moderate** spread | **wide** spread (uncertain) |
+
+*Inline gifs above; full-res: [rigid](../figures/rollout_pred_rigid.mp4) · [slip](../figures/rollout_pred_slip.mp4) · [drop](../figures/rollout_pred_drop.mp4). The orange sample cloud widening from left→right is the calibrated distribution over futures — the DiT diffusion rollout's core behavior.*
 
 ## Terminology (models & metrics)
 Precise definitions (for manuscript use).
