@@ -10,10 +10,14 @@ import my_config as C
 from wm.common import quat_to_R, R_to_6d
 from my_dataset_outcomes import OV, _splits, _raw_cloud, build_feats, _STATS
 
+SETTLE = os.environ.get("CDWM_SETTLE",                              # v3-derived target (poses + grip); OV still serves clouds/stats/splits
+    "/misc/kcgscratch1/MengyeGroup/yy5259/datasets/cdwm-grasp-dataset/gripper_v3/tier_a_outcomes_v2_aligned/settle_target.npz")
+GRIP_MAX = 0.8                                                      # right_driver_joint range (rad) -> normalize driver_rad to [0,1]
+
 
 class GraspMTLDS(Dataset):
     def __init__(self, split, stats=None, n_points=4096, seed=0):
-        z = np.load(f"{OV}/settle_target.npz", allow_pickle=True)
+        z = np.load(SETTLE, allow_pickle=True)
         sp = _splits()
         keep = np.array([i for i, o in enumerate(z["object_id"]) if sp.get(str(o)) == split])
         assert len(keep), f"no episodes for split {split}"
@@ -22,6 +26,8 @@ class GraspMTLDS(Dataset):
         self.t0 = z["t0"][keep].astype(np.float64)                      # (n,14) obj_quat,obj_pos,base_quat,base_pos
         self.obj = z["object_id"][keep]
         self.is_rigid = (z["v2_outcome"][keep] == "RIGID").astype(np.float32)
+        self.grip = (z["grip_target"][keep].astype(np.float32) / GRIP_MAX).clip(0, 1)   # (n,H) achieved closure, normalized [0,1]
+        self.grip_phase = z["grip_phase"][keep].astype(np.int8)         # (n,H) phase per frame (1=close 2=hold) for phase-sliced eval
         self.n, self.clc = n_points, {}
         self.rng, self.fixed = np.random.default_rng(seed), (split != "train")
         d = np.load(_STATS); self.fmean, self.fstd = d["mean"], d["std"]  # feature z-score (outcomes_v2 local stats)
@@ -49,7 +55,8 @@ class GraspMTLDS(Dataset):
         pts = np.concatenate([feat, dperp[:, None]], 1).astype(np.float32)
         tgt = np.clip((self.target[j] - self.stats["mean"]) / self.stats["std"], -8, 8).astype(np.float32)
         return dict(pts=torch.from_numpy(pts), base_rel=torch.from_numpy(self.base_rel[j]),
-                    closing=torch.zeros(C.H, dtype=torch.float32), table=torch.zeros(1),
+                    closing=torch.zeros(C.H, dtype=torch.float32), table=torch.zeros(1),   # driver_rad is a TARGET, never an input (no leakage)
                     target=torch.from_numpy(tgt), is_rigid=torch.tensor(self.is_rigid[j], dtype=torch.float32),
                     y_slip=torch.tensor(int(self.is_rigid[j] == 0)), object=o,
+                    grip_tgt=torch.from_numpy(self.grip[j]), grip_phase=torch.from_numpy(self.grip_phase[j]),   # (H,) achieved closure [0,1] + phase
                     t0=torch.from_numpy(self.t0[j].astype(np.float32)))   # (14) obj_quat,obj_pos,base_quat,base_pos — for ADD frame
